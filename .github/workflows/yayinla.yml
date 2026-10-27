@@ -1,0 +1,43 @@
+name: Setup olustur ve yayinla
+on:
+  workflow_dispatch:
+    inputs:
+      surum:
+        description: "Surum (ornek 1.0.1)"
+        required: true
+        default: "1.0.0"
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Guncelleme adresini yaz
+        shell: bash
+        run: echo "https://github.com/${{ github.repository }}" > guncelleme.txt
+      - name: Derle
+        run: dotnet publish HukukErp.csproj -c Release -r win-x64 --self-contained true -p:Version=${{ inputs.surum }} -o publish
+      - name: vpk kur
+        run: dotnet tool install -g vpk --version 0.0.942
+      - name: Onceki surumleri indir (fark paketi icin)
+        continue-on-error: true
+        run: vpk download github --repoUrl https://github.com/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }} --outputDir Releases
+      - name: Paketle
+        run: vpk pack --packId HukukERP --packVersion ${{ inputs.surum }} --packDir publish --mainExe HukukERP.exe --packTitle "HukukERP" --outputDir Releases --icon icon.ico
+      - name: GitHub Release'e yukle
+        run: vpk upload github --repoUrl https://github.com/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }} --outputDir Releases --publish --releaseName "HukukERP ${{ inputs.surum }}" --tag v${{ inputs.surum }}
+      - name: Sihirbazli kurulum dosyasini uret
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\\Inno Setup 6\\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
+          & $iscc "/DSurum=${{ inputs.surum }}" kurulum.iss
+      - name: Kurulum dosyasini Release'e ekle
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload v${{ inputs.surum }} Releases\HukukERP-Kurulum.exe --clobber
