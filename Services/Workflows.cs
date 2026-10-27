@@ -11,7 +11,7 @@ public static class Workflows
     // --------------------------------------------------------------- A. UETS yönlendirme
     /// <summary>PDF'i arşivler, ayrıştırır, kuyruğa yönlendirir. Tekrarlıysa null döner.
     /// Bireysel (Sahsi) hesaplar → 'Avukat Dava Tebligatları Kuyruğu'.</summary>
-    public static long? IngestPdf(Db db, Config cfg, string pdf, Row hesap, bool bildir = true)
+    public static long? IngestPdf(Db db, Config cfg, string pdf, Row hesap, bool bildir = true, string? teslimIso = null)
     {
         var h = Parser.FileHash(pdf);
         if (db.One("SELECT id FROM genel_tebligatlar WHERE dosya_hash=?", h) != null) return null;
@@ -21,7 +21,7 @@ public static class Workflows
         var kayit = Db.CopyFile(pdf, klasor, $"{Utils.TodayIso()}_{h[..8]}_{Path.GetFileName(pdf)}");
 
         var text = TebligatDosya.Metin(kayit);
-        var ayr = Parser.Ayristir(text, 7);
+        var ayr = Parser.Ayristir(text, 7, teslimIso);
 
         var durum = QAvukat;
         var konu = ayr.Tur.Length > 0 ? ayr.Tur : (TebligatDosya.Resim(kayit) ? "Tebligat (resim)" : "Tebligat");
