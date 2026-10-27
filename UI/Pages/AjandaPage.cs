@@ -123,6 +123,8 @@ public class AjandaPage : BasePage
     readonly ContentControl _body = new();
     readonly Dictionary<Gor, TbBtn> _tb = new();
     TbBtn? _araBtn;
+    DateTime? _secGun;      // ay görünümünde seçili (ilk tıklanan) gün
+    Border? _secHucre;
 
     static SolidColorBrush Hex(string h) => new((Color)ColorConverter.ConvertFromString(h));
 
@@ -487,8 +489,10 @@ public class AjandaPage : BasePage
     Border Hucre(DateTime d, List<AjandaItem> list, bool buAy)
     {
         var b = new Border { BorderThickness = new Thickness(0.5), ClipToBounds = true };
-        b.SetResourceReference(Border.BackgroundProperty, "surface2");
-        b.SetResourceReference(Border.BorderBrushProperty, "border");
+        bool secili = _secGun == d.Date;
+        b.SetResourceReference(Border.BackgroundProperty, secili ? "sel" : "surface2");
+        b.SetResourceReference(Border.BorderBrushProperty, secili ? "accent" : "border");
+        if (secili) _secHucre = b;
         var grid = new Grid();
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition());
@@ -527,7 +531,28 @@ public class AjandaPage : BasePage
             }
         }
         b.SizeChanged += (_, _) => Doldur();
-        b.MouseLeftButtonDown += (_, e) => { if (e.ClickCount == 2) Yeni(d, ""); };
+        // İlk tıklama günü seçer (renk değişir), aynı güne ikinci tıklama yeni kayıt penceresini açar.
+        b.MouseLeftButtonDown += (_, e) =>
+        {
+            if (_secGun == d.Date)
+            {
+                _secGun = null;
+                _secHucre = null;
+                b.SetResourceReference(Border.BackgroundProperty, "surface2");
+                b.SetResourceReference(Border.BorderBrushProperty, "border");
+                Yeni(d, "");
+                return;
+            }
+            if (_secHucre != null)
+            {
+                _secHucre.SetResourceReference(Border.BackgroundProperty, "surface2");
+                _secHucre.SetResourceReference(Border.BorderBrushProperty, "border");
+            }
+            _secGun = d.Date;
+            _secHucre = b;
+            b.SetResourceReference(Border.BackgroundProperty, "sel");
+            b.SetResourceReference(Border.BorderBrushProperty, "accent");
+        };
         return b;
     }
 
