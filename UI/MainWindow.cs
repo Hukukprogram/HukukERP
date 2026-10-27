@@ -187,9 +187,18 @@ public class MainWindow : Window
     // ---------------------------------------------------------------- tema
     void ApplyTheme(string name)
     {
+        if (name == Theme.Name) return;
+        // Renklerin her ekranda eksiksiz uygulanması için tema, program yeniden açılırken uygulanır.
+        if (!Ui.Confirm(this, "Tema değiştirmek için program kapanıp yeniden açılacak (verileriniz korunur). Devam edilsin mi?")) return;
         _cfg.Set("theme", name);
-        Theme.Apply(name);
-        Build(_current);
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exe))
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true });
+        }
+        catch (Exception) { }
+        Application.Current.Shutdown();
     }
 
     // ---------------------------------------------------------------- yapı
