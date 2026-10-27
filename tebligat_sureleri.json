@@ -1,0 +1,64 @@
+{
+  "surum": "2026-10-25",
+  "aciklama": "UETS'e düşen tebligata göre başlayan yasal süreler. Süreler tebliğ tarihinden işler. e-Tebligatta tebliğ tarihi = UETS'e ulaşma tarihi + 5 gün (5. günün sonu).",
+  "hesapKurallari": {
+    "eTebligatTebligGunu": 5,
+    "gunSuresi": "Tebliğin ertesi günü 1. gündür; son gün = tebliğ tarihi + N gün.",
+    "haftaSuresi": "Tebliğ gününe son haftada karşılık gelen günde biter (tebliğ + 7*N gün).",
+    "aySuresi": "Tebliğ gününe son ayda karşılık gelen günde biter; o gün ayda yoksa ayın son günü.",
+    "tatil": "Son gün hafta sonu veya resmi tatile denk gelirse ilk iş gününe uzar.",
+    "adliTatil": {
+      "baslangic": "07-20",
+      "bitis": "08-31",
+      "HMK": "Adli tatilde dolan süre, tatilin bitiminden itibaren 1 hafta uzar (7 Eylül).",
+      "CMK": "Adli tatilde dolan süre, tatilin bitiminden itibaren 3 gün uzar (3 Eylül).",
+      "IYUK": "Adli tatilde dolan süre, tatilin bitiminden itibaren 7 gün uzar.",
+      "YOK": "Adli tatil süreyi etkilemez (icra dairesi işlemleri, adli tatilde görülecek işler)."
+    },
+    "ihtiyatIlkesi": "Uzatmanın uygulanıp uygulanmayacağı tartışmalı ise program uzatmasız (en erken) tarihi göstermelidir."
+  },
+  "sureler": [
+    { "kod": "HMK_DAVA_DILEKCESI", "kategori": "Hukuk", "anahtarKelimeler": ["dava dilekçesi"], "islem": "Cevap dilekçesi", "sure": 2, "birim": "hafta", "kanun": "HMK 127", "adliTatil": "HMK", "not": "Mahkemeden 1 aya kadar ek süre istenebilir (süre içinde)." },
+    { "kod": "HMK_BASIT_DAVA_DILEKCESI", "kategori": "Hukuk", "anahtarKelimeler": ["dava dilekçesi", "basit yargılama"], "islem": "Cevap dilekçesi (basit yargılama)", "sure": 2, "birim": "hafta", "kanun": "HMK 317", "adliTatil": "HMK", "not": "" },
+    { "kod": "HMK_CEVAP_DILEKCESI", "kategori": "Hukuk", "anahtarKelimeler": ["cevap dilekçesi"], "islem": "Cevaba cevap (replik)", "sure": 2, "birim": "hafta", "kanun": "HMK 136", "adliTatil": "HMK", "not": "" },
+    { "kod": "HMK_REPLIK", "kategori": "Hukuk", "anahtarKelimeler": ["cevaba cevap", "replik"], "islem": "İkinci cevap (düplik)", "sure": 2, "birim": "hafta", "kanun": "HMK 136", "adliTatil": "HMK", "not": "" },
+    { "kod": "HMK_BILIRKISI", "kategori": "Hukuk", "anahtarKelimeler": ["bilirkişi raporu", "bilirkişi"], "islem": "Rapora itiraz / ek rapor talebi", "sure": 2, "birim": "hafta", "kanun": "HMK 281", "adliTatil": "HMK", "not": "" },
+    { "kod": "HMK_ARA_KARAR_KESIN_SURE", "kategori": "Hukuk", "anahtarKelimeler": ["ara karar", "kesin süre", "muhtıra"], "islem": "Mahkemenin verdiği işlem", "sure": null, "birim": "degisken", "kanun": "HMK 94", "adliTatil": "HMK", "not": "Süre ara kararda yazar; kullanıcıdan girilmeli." },
+    { "kod": "HMK_GEREKCELI_KARAR", "kategori": "Hukuk", "anahtarKelimeler": ["gerekçeli karar", "karar"], "islem": "İstinaf", "sure": 2, "birim": "hafta", "kanun": "HMK 345", "adliTatil": "HMK", "not": "" },
+    { "kod": "HMK_ISTINAF_DILEKCESI", "kategori": "Hukuk", "anahtarKelimeler": ["istinaf dilekçesi"], "islem": "İstinafa cevap / katılma yoluyla istinaf", "sure": 2, "birim": "hafta", "kanun": "HMK 347, 348", "adliTatil": "HMK", "not": "" },
+    { "kod": "HMK_BAM_KARARI", "kategori": "Hukuk", "anahtarKelimeler": ["bölge adliye", "istinaf kararı"], "islem": "Temyiz", "sure": 2, "birim": "hafta", "kanun": "HMK 361", "adliTatil": "HMK", "not": "Parasal sınır kontrol edilmeli." },
+    { "kod": "HMK_TEMYIZ_DILEKCESI", "kategori": "Hukuk", "anahtarKelimeler": ["temyiz dilekçesi"], "islem": "Temyize cevap", "sure": 2, "birim": "hafta", "kanun": "HMK 364", "adliTatil": "HMK", "not": "" },
+
+    { "kod": "IIK_ODEME_EMRI_ILAMSIZ", "kategori": "İcra", "anahtarKelimeler": ["ödeme emri", "örnek 7"], "islem": "İtiraz / ödeme", "sure": 7, "birim": "gun", "kanun": "İİK 62, 60", "adliTatil": "YOK", "not": "Mal beyanı da 7 gün (İİK 74)." },
+    { "kod": "IIK_ODEME_EMRI_KAMBIYO", "kategori": "İcra", "anahtarKelimeler": ["kambiyo", "örnek 10", "çek", "senet", "bono"], "islem": "İtiraz / şikâyet", "sure": 5, "birim": "gun", "kanun": "İİK 168, 169, 170/a", "adliTatil": "YOK", "not": "Ödeme süresi 10 gün." },
+    { "kod": "IIK_ODEME_EMRI_KAMBIYO_ODEME", "kategori": "İcra", "anahtarKelimeler": ["kambiyo", "örnek 10"], "islem": "Ödeme", "sure": 10, "birim": "gun", "kanun": "İİK 168", "adliTatil": "YOK", "not": "" },
+    { "kod": "IIK_ICRA_EMRI_ILAMLI", "kategori": "İcra", "anahtarKelimeler": ["icra emri", "ilamlı", "örnek 4-5"], "islem": "İcra mahkemesine itiraz / ödeme", "sure": 7, "birim": "gun", "kanun": "İİK 32, 33", "adliTatil": "YOK", "not": "" },
+    { "kod": "IIK_TAHLIYE_ODEME_EMRI", "kategori": "İcra", "anahtarKelimeler": ["tahliye", "örnek 13", "kira"], "islem": "İtiraz", "sure": 7, "birim": "gun", "kanun": "İİK 269", "adliTatil": "YOK", "not": "Kira borcunu ödeme süresi 30 gün." },
+    { "kod": "IIK_HACIZ_IHBAR_89_1", "kategori": "İcra", "anahtarKelimeler": ["89/1", "birinci haciz ihbarnamesi"], "islem": "İtiraz", "sure": 7, "birim": "gun", "kanun": "İİK 89/1", "adliTatil": "YOK", "not": "" },
+    { "kod": "IIK_HACIZ_IHBAR_89_2", "kategori": "İcra", "anahtarKelimeler": ["89/2", "ikinci haciz ihbarnamesi"], "islem": "İtiraz", "sure": 7, "birim": "gun", "kanun": "İİK 89/2", "adliTatil": "YOK", "not": "" },
+    { "kod": "IIK_HACIZ_IHBAR_89_3", "kategori": "İcra", "anahtarKelimeler": ["89/3", "üçüncü haciz ihbarnamesi"], "islem": "Ödeme veya menfi tespit davası", "sure": 15, "birim": "gun", "kanun": "İİK 89/3", "adliTatil": "YOK", "not": "" },
+    { "kod": "IIK_KIYMET_TAKDIRI", "kategori": "İcra", "anahtarKelimeler": ["kıymet takdiri", "bilirkişi raporu"], "islem": "İcra mahkemesine şikâyet", "sure": 7, "birim": "gun", "kanun": "İİK 128/a", "adliTatil": "YOK", "not": "" },
+    { "kod": "IIK_MEMUR_ISLEMI", "kategori": "İcra", "anahtarKelimeler": ["icra müdürlüğü", "müdürlük kararı"], "islem": "Şikâyet", "sure": 7, "birim": "gun", "kanun": "İİK 16", "adliTatil": "YOK", "not": "Kamu düzenine aykırılıkta süre yok." },
+    { "kod": "IIK_ICRA_MAHKEMESI_KARARI", "kategori": "İcra", "anahtarKelimeler": ["icra hukuk mahkemesi", "icra mahkemesi"], "islem": "İstinaf", "sure": 2, "birim": "hafta", "kanun": "İİK 363", "adliTatil": "YOK", "not": "Adli tatil uzatması tartışmalı; uzatmasız hesapla." },
+    { "kod": "IIK_IHALE_FESHI_MUHTIRA", "kategori": "İcra", "anahtarKelimeler": ["ihalenin feshi", "teminat", "harç"], "islem": "Eksik harç/teminatı tamamlama", "sure": 2, "birim": "hafta", "kanun": "İİK 134", "adliTatil": "YOK", "not": "Kesin süre (11. Yargı Paketi)." },
+
+    { "kod": "CMK_GEREKCELI_KARAR", "kategori": "Ceza", "anahtarKelimeler": ["gerekçeli karar", "hüküm"], "islem": "İstinaf", "sure": 2, "birim": "hafta", "kanun": "CMK 273", "adliTatil": "CMK", "not": "Süre gerekçeli kararın tebliğinden başlar." },
+    { "kod": "CMK_BAM_KARARI", "kategori": "Ceza", "anahtarKelimeler": ["bölge adliye", "ceza dairesi"], "islem": "Temyiz", "sure": 2, "birim": "hafta", "kanun": "CMK 291", "adliTatil": "CMK", "not": "" },
+    { "kod": "CMK_KYOK", "kategori": "Ceza", "anahtarKelimeler": ["kovuşturmaya yer olmadığı", "kyok", "takipsizlik"], "islem": "Sulh ceza hâkimliğine itiraz", "sure": 2, "birim": "hafta", "kanun": "CMK 173", "adliTatil": "CMK", "not": "" },
+    { "kod": "CMK_HAKIM_KARARI", "kategori": "Ceza", "anahtarKelimeler": ["sulh ceza", "itiraz", "tutuklama", "adli kontrol"], "islem": "İtiraz", "sure": 2, "birim": "hafta", "kanun": "CMK 268", "adliTatil": "CMK", "not": "" },
+    { "kod": "CMK_ISTINAF_TEMYIZ_DILEKCESI", "kategori": "Ceza", "anahtarKelimeler": ["istinaf dilekçesi", "temyiz dilekçesi"], "islem": "Cevap", "sure": 2, "birim": "hafta", "kanun": "CMK 277, 296", "adliTatil": "CMK", "not": "" },
+    { "kod": "KABAHAT_IPC", "kategori": "Ceza", "anahtarKelimeler": ["idari para cezası", "idari yaptırım"], "islem": "Sulh ceza hâkimliğine başvuru", "sure": 15, "birim": "gun", "kanun": "Kabahatler K. 27", "adliTatil": "YOK", "not": "Özel kanunda farklı süre/merci olabilir." },
+
+    { "kod": "IYUK_IDARI_ISLEM", "kategori": "İdari", "anahtarKelimeler": ["idari işlem", "belediye", "bakanlık", "valilik"], "islem": "İptal davası", "sure": 60, "birim": "gun", "kanun": "İYUK 7", "adliTatil": "IYUK", "not": "İvedi yargılama işlerinde 30 gün." },
+    { "kod": "IYUK_VERGI", "kategori": "İdari", "anahtarKelimeler": ["vergi", "ihbarname", "tarhiyat", "vergi dairesi"], "islem": "Vergi davası", "sure": 30, "birim": "gun", "kanun": "İYUK 7", "adliTatil": "IYUK", "not": "" },
+    { "kod": "AATUHK_ODEME_EMRI", "kategori": "İdari", "anahtarKelimeler": ["6183", "amme alacağı", "ödeme emri"], "islem": "Dava", "sure": 15, "birim": "gun", "kanun": "6183 s.K. 58", "adliTatil": "IYUK", "not": "" },
+    { "kod": "IYUK_DAVA_DILEKCESI", "kategori": "İdari", "anahtarKelimeler": ["idare mahkemesi", "dava dilekçesi", "vergi mahkemesi"], "islem": "Cevap / savunma", "sure": 30, "birim": "gun", "kanun": "İYUK 16", "adliTatil": "IYUK", "not": "Bir defaya mahsus 30 gün uzatılabilir." },
+    { "kod": "IYUK_KARAR", "kategori": "İdari", "anahtarKelimeler": ["idare mahkemesi kararı", "vergi mahkemesi kararı"], "islem": "İstinaf", "sure": 30, "birim": "gun", "kanun": "İYUK 45", "adliTatil": "IYUK", "not": "" },
+    { "kod": "IYUK_BIM_KARARI", "kategori": "İdari", "anahtarKelimeler": ["bölge idare", "danıştay"], "islem": "Temyiz", "sure": 30, "birim": "gun", "kanun": "İYUK 46", "adliTatil": "IYUK", "not": "" },
+    { "kod": "IYUK_YD_KARARI", "kategori": "İdari", "anahtarKelimeler": ["yürütmenin durdurulması"], "islem": "İtiraz", "sure": 7, "birim": "gun", "kanun": "İYUK 27", "adliTatil": "IYUK", "not": "" },
+
+    { "kod": "ARB_ISE_IADE_TUTANAK", "kategori": "İş", "anahtarKelimeler": ["arabuluculuk son tutanak", "işe iade"], "islem": "İşe iade davası", "sure": 2, "birim": "hafta", "kanun": "7036 s.K. 3/15, İş K. 20", "adliTatil": "YOK", "not": "İş davaları adli tatilde de görülür." },
+
+    { "kod": "AYM_BIREYSEL", "kategori": "Yüksek Mahkeme", "anahtarKelimeler": ["kesinleşme", "kesin karar"], "islem": "AYM bireysel başvuru", "sure": 30, "birim": "gun", "kanun": "6216 s.K. 47", "adliTatil": "YOK", "not": "İç yolların tüketildiği kararın öğrenilmesinden." }
+  ]
+}
