@@ -14,6 +14,7 @@ public class KanbanList : ListBox
     public KanbanList(string durum)
     {
         Durum = durum;
+        SetResourceReference(StyleProperty, typeof(ListBox));   // örtük stil türetilmiş sınıfa uygulanmaz
         AllowDrop = true;
         SelectionMode = SelectionMode.Single;
         PreviewMouseLeftButtonDown += (_, e) => _start = e.GetPosition(null);
