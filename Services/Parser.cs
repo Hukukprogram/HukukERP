@@ -300,7 +300,9 @@ public static class Parser
             var gm = Regex.Match(Utils.TrLower(text), @"(\d{1,2})\s*gün\s*içinde");
             // e-tebligat: UETS'e ulaşmadan sonraki 5. gün tebliğ edilmiş sayılır; cevap süresi bu günden işler.
             var bazIso = teslimVar ? Utils.AddDays(a.TebligTarihi, IsSureleri.ETebligatGunu) : a.TebligTarihi;
-            a.SonCevapTarihi = Utils.AddDays(bazIso, gm.Success ? int.Parse(gm.Groups[1].Value) : cevapGun);
+            // Metinde "N gün içinde" yoksa ve varsayılan süre verilmediyse tahmin yürütülmez (boş kalır; katalogdan hesaplanır).
+            a.SonCevapTarihi = gm.Success ? Utils.AddDays(bazIso, int.Parse(gm.Groups[1].Value))
+                : cevapGun > 0 ? Utils.AddDays(bazIso, cevapGun) : "";
         }
 
         a.TcListesi = ReTc.Matches(text).Select(x => x.Groups[1].Value).Distinct().ToList();
