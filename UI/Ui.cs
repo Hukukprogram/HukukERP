@@ -550,6 +550,10 @@ public class FormDialog : Window
     {
         Title = title;
         _fields = fields;
+        SetResourceReference(BackgroundProperty, "bg");
+        SetResourceReference(ForegroundProperty, "text");
+        FontFamily = new FontFamily("Segoe UI");
+        FontSize = 13;
         Owner = owner == null ? Application.Current.MainWindow : Window.GetWindow(owner);
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         SizeToContent = SizeToContent.Height;
