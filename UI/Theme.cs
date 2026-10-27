@@ -13,7 +13,7 @@ public static class Theme
         ["dark"] = new()
         {
             ["bg"] = "#0f141b", ["surface"] = "#171e28", ["surface2"] = "#1f2835", ["border"] = "#2a3544",
-            ["text"] = "#e6ebf2", ["muted"] = "#8b98aa", ["accent"] = "#4c8dff", ["accent_h"] = "#6ba1ff",
+            ["text"] = "#ffffff", ["muted"] = "#aab6c8", ["accent"] = "#4c8dff", ["accent_h"] = "#6ba1ff",
             ["ok"] = "#2ecc8f", ["warn"] = "#f5a524", ["danger"] = "#ff5d6c", ["sidebar"] = "#0b1017", ["sel"] = "#223250",
         },
         ["light"] = new()
