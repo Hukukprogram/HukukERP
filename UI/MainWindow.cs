@@ -193,9 +193,22 @@ public class MainWindow : Window
     }
 
     // ---------------------------------------------------------------- yapı
+    /// <summary>Elemanı bulunduğu üst öğeden ayırır (tema değişince arayüz yeniden kurulurken "mantıksal alt öğe" hatasını önler).</summary>
+    static void Ayir(FrameworkElement e)
+    {
+        switch (e.Parent)
+        {
+            case Panel pn: pn.Children.Remove(e); break;
+            case Decorator d: d.Child = null; break;
+            case ContentControl c: c.Content = null; break;
+        }
+    }
+
     void Build(int start)
     {
         _pages.Clear(); _keys.Clear(); _nav.Clear(); _navList.Clear();
+        _host.Content = null;
+        foreach (var e in new FrameworkElement[] { _tgHolder, _status, _lblDb, _banner, _host }) Ayir(e);
 
         var outer = new DockPanel { LastChildFill = true };
 
