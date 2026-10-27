@@ -21,7 +21,7 @@ public static class Workflows
         var kayit = Db.CopyFile(pdf, klasor, $"{Utils.TodayIso()}_{h[..8]}_{Path.GetFileName(pdf)}");
 
         var text = TebligatDosya.Metin(kayit);
-        var ayr = Parser.Ayristir(text, 7, teslimIso);
+        var ayr = Parser.Ayristir(text, 7, teslimIso, Utils.Iso(File.GetLastWriteTime(pdf)));
 
         var durum = QAvukat;
         var konu = ayr.Tur.Length > 0 ? ayr.Tur : (TebligatDosya.Resim(kayit) ? "Tebligat (resim)" : "Tebligat");
