@@ -367,7 +367,7 @@ sealed class KindBrushConverter : IValueConverter
     public object Convert(object value, Type t, object p, CultureInfo c) => (value as string) switch
     {
         "ok" => Theme.B("ok"), "warn" => Theme.B("warn"), "danger" => Theme.B("danger"),
-        "info" => Theme.B("accent"), "muted" => Theme.B("muted"), _ => DependencyProperty.UnsetValue,
+        "info" => Theme.B("accent"), "muted" => Theme.B("muted"), _ => Theme.B("text"),
     };
     public object ConvertBack(object value, Type t, object p, CultureInfo c) => throw new NotSupportedException();
 }
