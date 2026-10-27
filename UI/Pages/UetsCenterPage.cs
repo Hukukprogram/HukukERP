@@ -40,14 +40,14 @@ public class UetsCenterPage : BasePage
 
         // kuyruk sekmesi
         var qb = Ui.HRow(Ui.Btn("✔ İşlendi", "Ok", Isle), Ui.Btn("→ Dava Kaydı Aç", "", DavaAc), Ui.Btn("⏱ İş Listesine Ekle", "Primary", () => IseEkle(_tQ.Current)),
-                         Ui.Btn("✉ Mail Gönder", "", () => MailGonder(_tQ.Current)), Ui.Btn("📁 Davaya Bağla", "", () => DavayaBagla(_tQ.Current)), Ui.Btn("📂 Dosyayı Aç", "", () => OpenPdf(_tQ.Current)), Ui.Btn("🌐 UETS'te Göster", "", () => UetsteGoster(_tQ.Current)));
+                         Ui.Btn("✉ Mail Gönder", "", () => MailGonder(_tQ.Current)), Ui.Btn("📁 Davaya Bağla", "", () => DavayaBagla(_tQ.Current)), Ui.Btn("📂 Dosyayı Aç", "", () => OpenPdf(_tQ.Current)), Ui.Btn("🌐 UETS'te Göster", "", () => UetsteGoster(_tQ.Current)), Ui.Btn("📅 Tarihi Düzelt", "", () => TarihDuzelt(_tQ.Current)));
         var qDock = new DockPanel { Margin = new Thickness(0, 8, 0, 0) };
         DockPanel.SetDock(qb, Dock.Bottom); qb.Margin = new Thickness(0, 8, 0, 0);
         qDock.Children.Add(qb); qDock.Children.Add(_tQ);
 
         var aDock = new DockPanel { Margin = new Thickness(0, 8, 0, 0) };
         var ab = Ui.HRow(Ui.Btn("⏱ İş Listesine Ekle", "", () => IseEkle(_tA.Current)), Ui.Btn("📂 Dosyayı Aç", "", () => OpenPdf(_tA.Current)), Ui.Btn("🌐 UETS'te Göster", "", () => UetsteGoster(_tA.Current)), Ui.Btn("✉ Mail Gönder", "", () => MailGonder(_tA.Current)),
-                         Ui.Btn("Sil", "Danger", SilArsiv));
+                         Ui.Btn("📅 Tarihi Düzelt", "", () => TarihDuzelt(_tA.Current)), Ui.Btn("Sil", "Danger", SilArsiv));
         DockPanel.SetDock(ab, Dock.Bottom); ab.Margin = new Thickness(0, 8, 0, 0);
         aDock.Children.Add(ab); aDock.Children.Add(_tA);
 
@@ -99,6 +99,27 @@ public class UetsCenterPage : BasePage
         var y = Yol(r);
         if (y != null) Ui.OpenExternal(y);
         else Ui.Info(this, "Bu kayda bağlı dosya yok.");
+    }
+
+    /// <summary>UETS'teki "Teslim Tarihi"ni elle girer; son cevap tarihi e-tebligat kuralına göre yeniden hesaplanır.</summary>
+    void TarihDuzelt(Row? t)
+    {
+        if (t == null) { Ui.Info(this, "Önce bir tebligat seçin."); return; }
+        var v = FormDialog.Ask(this, "Tebliğ (Teslim) Tarihini Düzelt", new List<Field>
+        {
+            new Field("tarih", "UETS'teki Teslim Tarihi (GG.AA.YYYY)", "date", required: true),
+        }, new Dictionary<string, object?> { ["tarih"] = t.S("teblig_tarihi") });
+        if (v == null) return;
+        var yeni = Convert.ToString(v["tarih"]) ?? "";
+        if (Utils.ParseDate(yeni) == null) { Ui.Warn(this, "Geçerli bir tarih girin."); return; }
+        var yeniIso = Utils.Iso(Utils.ParseDate(yeni)!.Value);
+        // eski kayıttaki cevap süresi (gün) korunur: eski son cevap − eski tebliğ tarihi
+        var eskiT = Utils.ParseDate(t.S("teblig_tarihi")); var eskiS = Utils.ParseDate(t.S("son_cevap_tarihi"));
+        int cevapGun = eskiT != null && eskiS != null ? Math.Max(0, (eskiS.Value - eskiT.Value).Days) : 7;
+        var sonCevap = Utils.AddDays(Utils.AddDays(yeniIso, IsSureleri.ETebligatGunu), cevapGun);
+        Db.Update("genel_tebligatlar", t.L("id"), new Dictionary<string, object?> { ["teblig_tarihi"] = yeniIso, ["son_cevap_tarihi"] = sonCevap });
+        Refresh();
+        Ui.Info(this, $"Tebliğ tarihi {Utils.FmtDate(yeniIso)} olarak kaydedildi. Tebliğ sayılacağı gün: {Utils.FmtDate(Utils.AddDays(yeniIso, IsSureleri.ETebligatGunu))}; son cevap: {Utils.FmtDate(sonCevap)}.");
     }
 
     /// <summary>UETS tarayıcı sekmesine geçer ve aranacak tebligatı hatırlatır. Hiçbir tebligat açılmaz; açmayı siz yaparsınız.</summary>
