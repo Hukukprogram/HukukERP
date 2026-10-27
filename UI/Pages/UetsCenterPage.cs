@@ -34,7 +34,7 @@ public class UetsCenterPage : BasePage
         Top(bar);
 
         _tQ = new DataTable(("Tarih", "teblig_tarihi", Fmt.Date), ("Hesap", "uets_hesap_adi", null), ("Kurum", "gonderen_kurum", null),
-                            ("Esas", "esas_no", null), ("Konu", "konu", null), ("Son Cevap", "son_cevap_tarihi", Fmt.Date), ("Dava", "dava", null), ("İş Listesi", "is_durum", null));
+                            ("Esas", "esas_no", null), ("Konu", "konu", null), ("Dava", "dava", null), ("İş Listesi", "is_durum", null));
         _tA = new DataTable(("Tarih", "teblig_tarihi", Fmt.Date), ("Hesap", "uets_hesap_adi", null), ("Kurum", "gonderen_kurum", null),
                             ("Konu", "konu", null), ("Esas", "esas_no", null), ("Durum", "durum", null), ("Dava", "dava", null), ("İş Listesi", "is_durum", null));
 
@@ -94,7 +94,7 @@ public class UetsCenterPage : BasePage
                                "WHERE s.tebligat_id=g.id AND s.durum='Açık') AS is_durum, " +
                                "(SELECT TRIM(COALESCE(d.mahkeme_adi,'') || ' ' || COALESCE(d.esas_no,'')) FROM davalar d WHERE d.id=g.dava_id) AS dava";
         _tQ.Load(Db.Query($"SELECT g.*, {isDurum} FROM genel_tebligatlar g WHERE g.hesap_tipi=? AND g.durum=? ORDER BY g.id DESC", _tip, _kuyrukDurum),
-                 new() { ["son_cevap_tarihi"] = r => Ui.DeadlineKind(r.S("son_cevap_tarihi")) });
+                 null);
         _tA.Load(Db.Query($"SELECT g.*, {isDurum} FROM genel_tebligatlar g WHERE g.hesap_tipi=? ORDER BY g.id DESC LIMIT 500", _tip),
                  new() { ["durum"] = r => Ui.StatusKind(r.S("durum")) });
     }
@@ -106,7 +106,7 @@ public class UetsCenterPage : BasePage
         else Ui.Info(this, "Bu kayda bağlı dosya yok.");
     }
 
-    /// <summary>UETS'teki "Teslim Tarihi"ni elle girer; son cevap tarihi e-tebligat kuralına göre yeniden hesaplanır.</summary>
+    /// <summary>UETS'teki "Teslim Tarihi"ni elle girer; tebliğ sayılacağı gün e-tebligat kuralına göre gösterilir.</summary>
     void TarihDuzelt(Row? t)
     {
         if (t == null) { Ui.Info(this, "Önce bir tebligat seçin."); return; }
@@ -118,13 +118,9 @@ public class UetsCenterPage : BasePage
         var yeni = Convert.ToString(v["tarih"]) ?? "";
         if (Utils.ParseDate(yeni) == null) { Ui.Warn(this, "Geçerli bir tarih girin."); return; }
         var yeniIso = Utils.Iso(Utils.ParseDate(yeni)!.Value);
-        // eski kayıttaki cevap süresi (gün) korunur: eski son cevap − eski tebliğ tarihi
-        var eskiT = Utils.ParseDate(t.S("teblig_tarihi")); var eskiS = Utils.ParseDate(t.S("son_cevap_tarihi"));
-        int cevapGun = eskiT != null && eskiS != null ? Math.Max(0, (eskiS.Value - eskiT.Value).Days) : 7;
-        var sonCevap = Utils.AddDays(Utils.AddDays(yeniIso, IsSureleri.ETebligatGunu), cevapGun);
-        Db.Update("genel_tebligatlar", t.L("id"), new Dictionary<string, object?> { ["teblig_tarihi"] = yeniIso, ["son_cevap_tarihi"] = sonCevap });
+        Db.Update("genel_tebligatlar", t.L("id"), new Dictionary<string, object?> { ["teblig_tarihi"] = yeniIso });
         Refresh();
-        Ui.Info(this, $"Tebliğ tarihi {Utils.FmtDate(yeniIso)} olarak kaydedildi. Tebliğ sayılacağı gün: {Utils.FmtDate(Utils.AddDays(yeniIso, IsSureleri.ETebligatGunu))}; son cevap: {Utils.FmtDate(sonCevap)}.");
+        Ui.Info(this, $"Tebliğ tarihi {Utils.FmtDate(yeniIso)} olarak kaydedildi. Tebliğ sayılacağı gün: {Utils.FmtDate(Utils.AddDays(yeniIso, IsSureleri.ETebligatGunu))}.");
     }
 
     /// <summary>UETS tarayıcı sekmesine geçer ve aranacak tebligatı hatırlatır. Hiçbir tebligat açılmaz; açmayı siz yaparsınız.</summary>
@@ -148,13 +144,12 @@ public class UetsCenterPage : BasePage
         var ek = t.S("pdf_yolu");
         var kurum = t.S("gonderen_kurum").Length > 0 ? t.S("gonderen_kurum") : "Tebligat";
         var konu = string.Join(" – ", new[] { kurum, t.S("esas_no") }.Where(x => x.Length > 0));
-        var sc = Utils.FmtDate(t.S("son_cevap_tarihi"));
         var v = FormDialog.Ask(this, "Mail Gönder", new List<Field>
         {
             new("to", "Alıcı e-posta (birden çok ise virgülle)", required: true),
             new("subject", "Konu", required: true, def: konu),
             new("body", "Mesaj", "multiline", def: $"Merhaba,\n\n{konu} ile ilgili tebligat ekte yer almaktadır.\n" +
-                $"Tebliğ tarihi: {Utils.FmtDate(t.S("teblig_tarihi"))}\nSon cevap tarihi: {(sc.Length > 0 ? sc : "-")}\n\nİyi çalışmalar."),
+                $"Tebliğ tarihi: {Utils.FmtDate(t.S("teblig_tarihi"))}\n\nİyi çalışmalar."),
             new("ek", "PDF ekle", "check", def: ek.Length > 0),
         });
         if (v == null) return;
