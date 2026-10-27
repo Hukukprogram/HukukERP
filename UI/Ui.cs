@@ -389,6 +389,8 @@ public class DataTable : DataGrid
     public DataTable(params (string Title, string Key, Func<object?, string>? Fmt)[] cols)
     {
         _cols = cols;
+        SetResourceReference(StyleProperty, typeof(DataGrid));   // örtük stil türetilmiş sınıfa uygulanmaz
+        AutoGenerateColumns = false;   // yalnızca tanımlı sütunlar (aksi halde Cells/Kinds gibi dahili alanlar da sütun olur)
         SelectionMode = DataGridSelectionMode.Single;
         VirtualizingPanel.SetScrollUnit(this, ScrollUnit.Pixel);
         HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
@@ -459,6 +461,7 @@ public class DateBox : TextBox
 
     public DateBox(string? iso = null)
     {
+        SetResourceReference(StyleProperty, typeof(TextBox));   // örtük stil türetilmiş sınıfa uygulanmaz
         MaxLength = 10;
         MaxWidth = 150;
         Text = string.IsNullOrEmpty(iso) ? "" : Utils.FmtDate(iso);
