@@ -347,6 +347,9 @@
         <Setter Property="Foreground" Value="{DynamicResource text}"/>
         <Setter Property="Background" Value="{DynamicResource surface}"/>
         <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource text}"/>
+            </Trigger>
             <Trigger Property="AlternationIndex" Value="1">
                 <Setter Property="Background" Value="{DynamicResource surface2}"/>
             </Trigger>
