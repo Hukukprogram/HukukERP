@@ -94,6 +94,11 @@ public class MainWindow : Window
         Title = "HukukERP — Hukuk Bürosu Yönetimi";
         Width = 1480; Height = 920;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        // Not: Styles.xaml'deki "Window" stili türetilmiş pencerelere (MainWindow) uygulanmaz; renkleri burada bağlıyoruz.
+        SetResourceReference(BackgroundProperty, "bg");
+        SetResourceReference(ForegroundProperty, "text");
+        FontFamily = new FontFamily("Segoe UI");
+        FontSize = 13;
         _ctx = new AppCtx
         {
             Db = db, Cfg = cfg,
@@ -188,17 +193,9 @@ public class MainWindow : Window
     void ApplyTheme(string name)
     {
         if (name == Theme.Name) return;
-        // Renklerin her ekranda eksiksiz uygulanması için tema, program yeniden açılırken uygulanır.
-        if (!Ui.Confirm(this, "Tema değiştirmek için program kapanıp yeniden açılacak (verileriniz korunur). Devam edilsin mi?")) return;
         _cfg.Set("theme", name);
-        try
-        {
-            var exe = Environment.ProcessPath;
-            if (!string.IsNullOrEmpty(exe))
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true });
-        }
-        catch (Exception) { }
-        Application.Current.Shutdown();
+        Theme.Apply(name);
+        Build(_current);
     }
 
     // ---------------------------------------------------------------- yapı
