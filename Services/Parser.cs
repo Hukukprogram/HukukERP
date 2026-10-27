@@ -254,7 +254,8 @@ public static class Parser
         return bestScore >= 90 ? best : "Genel";
     }
 
-    public static Ayrisan Ayristir(string text, int cevapGun = 7)
+    /// <param name="teslimIso">UETS sayfasında okunan "Teslim Tarihi" (yyyy-MM-dd). Verilirse tebliğ tarihi olarak bu kullanılır.</param>
+    public static Ayrisan Ayristir(string text, int cevapGun = 7, string? teslimIso = null)
     {
         var a = new Ayrisan { MetinVar = text.Trim().Length > 0 };
         if (!a.MetinVar) return a;
@@ -270,9 +271,9 @@ public static class Parser
         }
 
         var tarihler = ReTarih.Matches(text).Select(x => Utils.ParseDate(x.Groups[1].Value)).Where(d => d != null).Select(d => d!.Value).ToList();
-        if (tarihler.Count > 0)
+        if (tarihler.Count > 0 || !string.IsNullOrEmpty(teslimIso))
         {
-            a.TebligTarihi = Utils.Iso(tarihler.Max());
+            if (tarihler.Count > 0) a.TebligTarihi = Utils.Iso(tarihler.Max());
             foreach (var line in text.Split('\n'))
             {
                 if (Utils.TrLower(line).Contains("tebli"))
@@ -285,8 +286,19 @@ public static class Parser
                     }
                 }
             }
+            // UETS'te "Teslim Tarihi: 26.10.2026 15:00" yazan tarih, tebligatın UETS'e ulaştığı (tebliğ) tarihidir; en öncelikli kaynaktır.
+            bool teslimVar = false;
+            if (!string.IsNullOrEmpty(teslimIso)) { a.TebligTarihi = teslimIso; teslimVar = true; }
+            var tm = Regex.Match(text, @"teslim\s*tarihi\s*[:\-]?\s*(\d{1,2}\s*[./]\s*\d{1,2}\s*[./]\s*\d{4})", CI);
+            if (tm.Success && string.IsNullOrEmpty(teslimIso))
+            {
+                var td = Utils.ParseDate(Regex.Replace(tm.Groups[1].Value, @"\s+", "").Replace('/', '.'));
+                if (td != null) { a.TebligTarihi = Utils.Iso(td.Value); teslimVar = true; }
+            }
             var gm = Regex.Match(Utils.TrLower(text), @"(\d{1,2})\s*gün\s*içinde");
-            a.SonCevapTarihi = Utils.AddDays(a.TebligTarihi, gm.Success ? int.Parse(gm.Groups[1].Value) : cevapGun);
+            // e-tebligat: UETS'e ulaşmadan sonraki 5. gün tebliğ edilmiş sayılır; cevap süresi bu günden işler.
+            var bazIso = teslimVar ? Utils.AddDays(a.TebligTarihi, IsSureleri.ETebligatGunu) : a.TebligTarihi;
+            a.SonCevapTarihi = Utils.AddDays(bazIso, gm.Success ? int.Parse(gm.Groups[1].Value) : cevapGun);
         }
 
         a.TcListesi = ReTc.Matches(text).Select(x => x.Groups[1].Value).Distinct().ToList();
