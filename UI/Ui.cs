@@ -162,6 +162,36 @@ public static class Ui
         return b;
     }
 
+    /// <summary>Tek satırda eşit genişlikli düğmeler; alt satıra geçmez, düğmeler pencereye göre daralır.</summary>
+    public static Grid FRow(params Button[] els)
+    {
+        var g = new Grid();
+        for (int i = 0; i < els.Length; i++)
+        {
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var b = els[i];
+            b.Margin = new Thickness(i == 0 ? 0 : 4, 0, 0, 0);
+            b.Padding = new Thickness(2, 7, 2, 7);
+            b.FontSize = 12;
+            b.HorizontalAlignment = HorizontalAlignment.Stretch;
+            Grid.SetColumn(b, i);
+            g.Children.Add(b);
+        }
+        return g;
+    }
+
+    /// <summary>Düğme satırı: sığmazsa alt satıra geçer, hiçbir düğme kesilmez.</summary>
+    public static WrapPanel WRow(params UIElement[] els)
+    {
+        var wp = new WrapPanel { Orientation = Orientation.Horizontal };
+        foreach (var e in els)
+        {
+            if (e is FrameworkElement fe) { fe.Margin = new Thickness(0, 0, 8, 6); fe.VerticalAlignment = VerticalAlignment.Center; }
+            wp.Children.Add(e);
+        }
+        return wp;
+    }
+
     /// <summary>Düğme/öğe satırı: öğeler arasında 8 px boşluk.</summary>
     public static StackPanel HRow(params UIElement[] els)
     {
