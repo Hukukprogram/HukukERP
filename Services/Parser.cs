@@ -255,7 +255,8 @@ public static class Parser
     }
 
     /// <param name="teslimIso">UETS sayfasında okunan "Teslim Tarihi" (yyyy-MM-dd). Verilirse tebliğ tarihi olarak bu kullanılır.</param>
-    public static Ayrisan Ayristir(string text, int cevapGun = 7, string? teslimIso = null)
+    /// <param name="varsayilanIso">Evrakta ve UETS sayfasında Teslim Tarihi bulunamazsa kullanılacak tarih (örn. dosyanın indirilme günü). Evraktaki tarihler (dilekçe/karar tarihi) tebliğ tarihi sayılmaz.</param>
+    public static Ayrisan Ayristir(string text, int cevapGun = 7, string? teslimIso = null, string? varsayilanIso = null)
     {
         var a = new Ayrisan { MetinVar = text.Trim().Length > 0 };
         if (!a.MetinVar) return a;
@@ -271,7 +272,7 @@ public static class Parser
         }
 
         var tarihler = ReTarih.Matches(text).Select(x => Utils.ParseDate(x.Groups[1].Value)).Where(d => d != null).Select(d => d!.Value).ToList();
-        if (tarihler.Count > 0 || !string.IsNullOrEmpty(teslimIso))
+        if (tarihler.Count > 0 || !string.IsNullOrEmpty(teslimIso) || !string.IsNullOrEmpty(varsayilanIso))
         {
             if (tarihler.Count > 0) a.TebligTarihi = Utils.Iso(tarihler.Max());
             foreach (var line in text.Split('\n'))
@@ -295,6 +296,7 @@ public static class Parser
                 var td = Utils.ParseDate(Regex.Replace(tm.Groups[1].Value, @"\s+", "").Replace('/', '.'));
                 if (td != null) { a.TebligTarihi = Utils.Iso(td.Value); teslimVar = true; }
             }
+            if (!teslimVar && !string.IsNullOrEmpty(varsayilanIso)) { a.TebligTarihi = varsayilanIso; teslimVar = true; }
             var gm = Regex.Match(Utils.TrLower(text), @"(\d{1,2})\s*gün\s*içinde");
             // e-tebligat: UETS'e ulaşmadan sonraki 5. gün tebliğ edilmiş sayılır; cevap süresi bu günden işler.
             var bazIso = teslimVar ? Utils.AddDays(a.TebligTarihi, IsSureleri.ETebligatGunu) : a.TebligTarihi;
