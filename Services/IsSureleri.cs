@@ -86,6 +86,19 @@ public static class IsSureleri
         return best;
     }
 
+    /// <summary>Tebligat metnine uyan katalog süresine göre son cevap/işlem tarihi (yyyy-MM-dd). UETS'e ulaşma tarihine e-tebligat günü eklenir,
+    /// hafta sonu/resmî tatil ve adli tatil uzatması uygulanır. Uygun süre bulunamazsa ya da süre elle girilecekse null döner.</summary>
+    public static string? SonCevapTahmin(string metin, string uetsTarihiIso)
+    {
+        var bas = Core.Utils.ParseDate(uetsTarihiIso);
+        if (bas == null) return null;
+        var i = EnIyiEslesme(metin);
+        if (i < 0) return null;
+        var t = Liste()[i];
+        if (t.Sure == null) return null;
+        return Core.Utils.Iso(Hesapla(t, bas.Value, true).Son);
+    }
+
     public record Sonuc(DateTime Tebligat, DateTime Son, bool AdliTatilUzatti, string Aciklama);
 
     /// <summary>baslangic: e-tebligatta UETS'e ulaşma tarihi (eTebligat=true) veya doğrudan tebliğ tarihi.
