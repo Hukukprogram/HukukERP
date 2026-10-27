@@ -458,21 +458,37 @@ public class UetsBrowser : Grid
         e.Handled = true;  // varsayılan indirme penceresi açılmasın
         _status.Text = $"İndiriliyor: {Path.GetFileName(yol)}";
         var op = e.DownloadOperation;
-        op.StateChanged += (_, _) =>
+        // Tebligatın açık olduğu UETS sayfasındaki "Teslim Tarihi" okunur (yalnızca okuma; tıklama yapılmaz).
+        var teslimGorev = TeslimTarihiOku();
+        op.StateChanged += async (_, _) =>
         {
-            if (op.State == CoreWebView2DownloadState.Completed) Bitti(yol, hesap);
+            if (op.State == CoreWebView2DownloadState.Completed) Bitti(yol, hesap, await teslimGorev);
             else if (op.State == CoreWebView2DownloadState.Interrupted) _status.Text = $"İndirme yarım kaldı: {Path.GetFileName(yol)}";
         };
     }
 
-    void Bitti(string yol, Row hesap)
+    /// <summary>Açık UETS sayfasındaki tek bir "Teslim Tarihi: GG.AA.YYYY SS:DD" değerini okur; yoksa ya da birden çoksa boş döner.</summary>
+    async Task<string?> TeslimTarihiOku()
     {
-        Ui.RunAsync(() => Ingest(yol, hesap),
+        try
+        {
+            var res = await _view.CoreWebView2.ExecuteScriptAsync("document.body ? document.body.innerText : ''");
+            var metin = System.Text.Json.JsonSerializer.Deserialize<string>(res) ?? "";
+            var ms = System.Text.RegularExpressions.Regex.Matches(metin, @"Teslim\s*Tarihi\s*[:\-]?\s*(\d{1,2}\.\d{1,2}\.\d{4})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var tarihler = ms.Select(m => Utils.ParseDate(m.Groups[1].Value)).Where(d => d != null).Select(d => Utils.Iso(d!.Value)).Distinct().ToList();
+            return tarihler.Count == 1 ? tarihler[0] : null;   // birden çok farklı tarih varsa (liste sayfası) karıştırmamak için kullanılmaz
+        }
+        catch (Exception) { return null; }
+    }
+
+    void Bitti(string yol, Row hesap, string? teslimIso = null)
+    {
+        Ui.RunAsync(() => Ingest(yol, hesap, teslimIso),
             r => { _status.Text = $"İndirilen işlendi: {r.Yeni} yeni, {r.Toplam - r.Yeni} tekrar/atlanan (kuyruk sekmesine bakın)"; _onImported(); },
             m => _status.Text = $"İşlenemedi: {m}");
     }
 
-    (int Yeni, int Toplam) Ingest(string yol, Row hesap)
+    (int Yeni, int Toplam) Ingest(string yol, Row hesap, string? teslimIso = null)
     {
         var pdfler = new List<string>();
         var uz = Path.GetExtension(yol).ToLowerInvariant();
@@ -490,7 +506,7 @@ public class UetsBrowser : Grid
             }
         }
         else if (TebligatDosya.Destekli(yol)) pdfler.Add(yol);
-        var yeni = pdfler.Count(p => Workflows.IngestPdf(Db, Cfg, p, hesap) != null);
+        var yeni = pdfler.Count(p => Workflows.IngestPdf(Db, Cfg, p, hesap, true, pdfler.Count == 1 ? teslimIso : null) != null);
         return (yeni, pdfler.Count);
     }
 
