@@ -39,15 +39,20 @@ public class UetsCenterPage : BasePage
                             ("Konu", "konu", null), ("Esas", "esas_no", null), ("Durum", "durum", null), ("Dava", "dava", null), ("İş Listesi", "is_durum", null));
 
         // kuyruk sekmesi
-        var qb = Ui.HRow(Ui.Btn("✔ İşlendi", "Ok", Isle), Ui.Btn("→ Dava Kaydı Aç", "", DavaAc), Ui.Btn("⏱ İş Listesine Ekle", "Primary", () => IseEkle(_tQ.Current)),
-                         Ui.Btn("✉ Mail Gönder", "", () => MailGonder(_tQ.Current)), Ui.Btn("📁 Davaya Bağla", "", () => DavayaBagla(_tQ.Current)), Ui.Btn("📂 Dosyayı Aç", "", () => OpenPdf(_tQ.Current)), Ui.Btn("🌐 UETS'te Göster", "", () => UetsteGoster(_tQ.Current)), Ui.Btn("📅 Tarihi Düzelt", "", () => TarihDuzelt(_tQ.Current)));
+        Button B(string metin, string ipucu, string stil, Action eylem) { var dugme = Ui.Btn(metin, stil, eylem); dugme.ToolTip = ipucu; return dugme; }
+        var qb = Ui.FRow(B("✔ İşlendi", "İşlendi olarak işaretle", "Ok", Isle), B("→ Dava Aç", "Dava kaydı aç", "", DavaAc),
+                         B("⏱ İş Listesi", "İş listesine süreli iş ekle", "Primary", () => IseEkle(_tQ.Current)), B("✉ Mail", "Mail gönder", "", () => MailGonder(_tQ.Current)),
+                         B("📁 Bağla", "Davaya bağla", "", () => DavayaBagla(_tQ.Current)), B("📂 Dosya", "Dosyayı aç", "", () => OpenPdf(_tQ.Current)),
+                         B("🌐 UETS", "UETS'te göster", "", () => UetsteGoster(_tQ.Current)), B("📅 Tarih", "Tebliğ (teslim) tarihini düzelt", "", () => TarihDuzelt(_tQ.Current)),
+                         B("🗑 Sil", "Tebligatı sil", "Danger", () => SilTebligat(_tQ.Current)));
         var qDock = new DockPanel { Margin = new Thickness(0, 8, 0, 0) };
         DockPanel.SetDock(qb, Dock.Bottom); qb.Margin = new Thickness(0, 8, 0, 0);
         qDock.Children.Add(qb); qDock.Children.Add(_tQ);
 
         var aDock = new DockPanel { Margin = new Thickness(0, 8, 0, 0) };
-        var ab = Ui.HRow(Ui.Btn("⏱ İş Listesine Ekle", "", () => IseEkle(_tA.Current)), Ui.Btn("📂 Dosyayı Aç", "", () => OpenPdf(_tA.Current)), Ui.Btn("🌐 UETS'te Göster", "", () => UetsteGoster(_tA.Current)), Ui.Btn("✉ Mail Gönder", "", () => MailGonder(_tA.Current)),
-                         Ui.Btn("📅 Tarihi Düzelt", "", () => TarihDuzelt(_tA.Current)), Ui.Btn("Sil", "Danger", SilArsiv));
+        var ab = Ui.FRow(B("⏱ İş Listesi", "İş listesine süreli iş ekle", "", () => IseEkle(_tA.Current)), B("📂 Dosya", "Dosyayı aç", "", () => OpenPdf(_tA.Current)),
+                         B("🌐 UETS", "UETS'te göster", "", () => UetsteGoster(_tA.Current)), B("✉ Mail", "Mail gönder", "", () => MailGonder(_tA.Current)),
+                         B("📅 Tarih", "Tebliğ (teslim) tarihini düzelt", "", () => TarihDuzelt(_tA.Current)), B("🗑 Sil", "Tebligatı sil", "Danger", () => SilTebligat(_tA.Current)));
         DockPanel.SetDock(ab, Dock.Bottom); ab.Margin = new Thickness(0, 8, 0, 0);
         aDock.Children.Add(ab); aDock.Children.Add(_tA);
 
@@ -164,9 +169,8 @@ public class UetsCenterPage : BasePage
             m => Ui.Warn(this, $"Mail gönderilemedi:\n{m}"));
     }
 
-    void SilArsiv()
+    void SilTebligat(Row? t)
     {
-        var t = _tA.Current;
         if (t == null) { Ui.Info(this, "Önce silinecek tebligatı seçin."); return; }
         var kurum = t.S("gonderen_kurum").Length > 0 ? t.S("gonderen_kurum") : "Tebligat";
         if (!Ui.Confirm(this, $"Bu tebligat silinsin mi?\n\n{kurum} — {t.S("esas_no")}\n(Kayıt kuyruk ve arşivden kalkar.)")) return;
