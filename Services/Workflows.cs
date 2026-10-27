@@ -21,7 +21,11 @@ public static class Workflows
         var kayit = Db.CopyFile(pdf, klasor, $"{Utils.TodayIso()}_{h[..8]}_{Path.GetFileName(pdf)}");
 
         var text = TebligatDosya.Metin(kayit);
-        var ayr = Parser.Ayristir(text, 7, teslimIso, Utils.Iso(File.GetLastWriteTime(pdf)));
+        var ayr = Parser.Ayristir(text, 0, teslimIso, Utils.Iso(File.GetLastWriteTime(pdf)));
+        // Son cevap tarihi: önce tebligat süresi kataloğundan (hafta sonu/tatil/adli tatil dahil), yoksa metindeki "N gün içinde"
+        var katalog = IsSureleri.SonCevapTahmin(ayr.Tur, ayr.TebligTarihi)          // önce tebligatın türü (en güvenilir)
+                      ?? IsSureleri.SonCevapTahmin($"{ayr.Tur} {text}", ayr.TebligTarihi);
+        if (katalog != null) ayr.SonCevapTarihi = katalog;
 
         var durum = QAvukat;
         var konu = ayr.Tur.Length > 0 ? ayr.Tur : (TebligatDosya.Resim(kayit) ? "Tebligat (resim)" : "Tebligat");
@@ -39,7 +43,7 @@ public static class Workflows
         {
             var s = db.GetSettings();
             var msg = $"📬 Yeni UETS tebligatı\nHesap: {hesap.S("hesap_adi")} ({tip})\nKurum: {(ayr.Kurum.Length > 0 ? ayr.Kurum : "-")}\n" +
-                      $"Konu: {konu}\nEsas: {(ayr.EsasNo.Length > 0 ? ayr.EsasNo : "-")}\nSon cevap: {(Utils.FmtDate(ayr.SonCevapTarihi) is { Length: > 0 } f ? f : "-")}";
+                      $"Konu: {konu}\nEsas: {(ayr.EsasNo.Length > 0 ? ayr.EsasNo : "-")}";
             try
             {
                 Notify.SendPersonal(s, msg, kayit);
