@@ -6,7 +6,7 @@ Bireysel avukat büro yönetimi programı (WPF, SQLite). **Mevcut `config.json` 
 1. GitHub'da boş bir depo açın (public). Bu klasörün içeriğini (zip'in içindekileri) depoya yükleyin.
 2. Depoda **Actions → "Setup olustur ve yayinla" → Run workflow**, sürüm numarasını yazın (ör. 1.0.0).
 3. Birkaç dakika sonra deponun **Releases** sayfasında `HukukERP-Kurulum.exe` (sihirbazlı kurulum) oluşur. İndirip her bilgisayarda çalıştırın.
-4. Güncelleme: kodu değiştirip aynı adımı yeni sürüm numarasıyla (1.0.1) tekrarlayın. Kurulu programlar açılışta yeni sürümü bulup kurulum önerir.
+4. Güncelleme: dosyaları depoya gönderip (Commit + Push) beklemeniz yeterli; sürüm otomatik yayınlanır (1.<n>.0). Elle yayınlamak için Actions → Run workflow. Kurulu programlar açılışta yeni sürümü bulup kurulum önerir.
 
 Veriler `%LOCALAPPDATA%\HukukERP\Veri` içindedir; güncellemede silinmez. Yerel yayın için alternatif: `yayinla.bat 1.0.1` (.NET 8 SDK ve GITHUB_TOKEN gerekir).
 
