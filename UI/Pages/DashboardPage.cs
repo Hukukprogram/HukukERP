@@ -49,8 +49,6 @@ public class DashboardPage : BasePage
         bTah.HorizontalAlignment = HorizontalAlignment.Left;
         foreach (UIElement w in new UIElement[] { _lAlacak, _lSmm, _bar, bTah }) _cFinans.Outer.Children.Add(w);
         rightStack.Children.Add(Gap(_cFinans));
-        rightStack.Children.Add(Gap(_cIs));
-        rightStack.Children.Add(Gap(_cGorev));
 
         var cols = new Grid { Margin = new Thickness(0, 0, 6, 0) };
         cols.ColumnDefinitions.Add(new ColumnDefinition());
@@ -62,7 +60,11 @@ public class DashboardPage : BasePage
         // Üstte "Bugün" bölümü, altında genel özet
         _bugun = new BugunPage(ctx, true);
         cols.Margin = new Thickness(0, 14, 6, 0);
+        // Sıra: 1) Süreli işler  2) Kişisel görevler  3) Bugün  4) UETS + ofis özeti
         var tum = new StackPanel();
+        tum.Children.Add(new Border { Margin = new Thickness(0, 0, 6, 0), Child = _cIs });
+        tum.Children.Add(new Border { Margin = new Thickness(0, 12, 6, 0), Child = _cGorev });
+        _bugun.Margin = new Thickness(0, 14, 0, 0);
         tum.Children.Add(_bugun);
         tum.Children.Add(cols);
         Fill(new ScrollViewer { Content = tum, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
@@ -157,7 +159,7 @@ public class DashboardPage : BasePage
 
         // Süreli işler
         _cIs.Clear();
-        var isler = d.Query("SELECT * FROM sureler WHERE durum='Açık' ORDER BY son_tarih LIMIT 6");
+        var isler = d.Query("SELECT * FROM sureler WHERE durum='Açık' ORDER BY son_tarih='', son_tarih LIMIT 10");
         if (isler.Count == 0) _cIs.AddEmpty("Açık süreli iş yok");
         foreach (var sj in isler)
         {
