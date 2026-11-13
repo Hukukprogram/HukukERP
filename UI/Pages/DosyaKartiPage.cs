@@ -20,6 +20,10 @@ public class DosyaKartiPage : BasePage
     static readonly string[] Kanallar = { "Telefon", "WhatsApp", "SMS", "E-posta", "Yüz yüze", "Diğer" };
 
     readonly ComboBox _combo = new() { MinWidth = 420, Margin = new Thickness(0, 0, 8, 0) };
+    readonly ComboBox _mcombo = new() { MinWidth = 280, Margin = new Thickness(0, 0, 14, 0) };
+    readonly DataTable _tDosya = new(("Mahkeme", "mahkeme_adi", null), ("Esas No", "esas_no", null), ("Tür", "dava_turu", null),
+        ("Karşı Taraf", "karsi_taraf", null), ("Duruşma", "durusma_tarihi", Fmt.Date), ("Aşama", "asama_durum", null)) { Height = 130 };
+    readonly TextBlock _dosyaBaslik = Ui.H2("Müvekkilin dava dosyaları");
     readonly TextBlock _bilgi = Ui.Text("", 13, false, "text", true);
     readonly TextBlock _ozet = Ui.Text("", 13, true, "text", true);
     readonly DataTable _t = new(("Tarih", "tarih", Fmt.Date), ("Tür", "tur", null), ("Açıklama", "aciklama", null), ("Tutar / Süre", "tutar", null));
@@ -30,8 +34,24 @@ public class DosyaKartiPage : BasePage
     public DosyaKartiPage(AppCtx ctx) : base(ctx)
     {
         Top(Ui.PageHeader("Dosya Kartı", "Bir davaya bağlı her şey tek ekranda • evrakı pencereye sürükleyip bırakabilirsiniz"));
-        _combo.SelectionChanged += (_, _) => { if (!_busy) Yukle(); };
-        Top(Ui.HRow(Ui.Muted("Dava:", false), _combo, Ui.Btn("＋ Süreli İş", "Primary", SureEkle),
+        _combo.SelectionChanged += (_, _) =>
+        {
+            if (_busy) return;
+            _busy = true;
+            try { DosyaSec(Secili); } finally { _busy = false; }
+            Yukle();
+        };
+        _mcombo.SelectionChanged += (_, _) => { if (!_busy) { _busy = true; try { DavaDoldur(0); } finally { _busy = false; } Yukle(); } };
+        _tDosya.SelectionChanged += (_, _) =>
+        {
+            if (_busy || _tDosya.Current == null) return;
+            var id = _tDosya.Current.L("id");
+            _busy = true;
+            try { var it = _combo.Items.Cast<ComboItem>().FirstOrDefault(x => Convert.ToInt64(x.Value) == id); if (it != null) _combo.SelectedItem = it; }
+            finally { _busy = false; }
+            Yukle();
+        };
+        Top(Ui.HRow(Ui.Muted("Müvekkil:", false), _mcombo, Ui.Muted("Dava:", false), _combo, Ui.Btn("＋ Süreli İş", "Primary", SureEkle),
                     Ui.Btn("İş Listesi", "", () => Ctx.Navigate("is_listesi", null)), Ui.Btn("Dava Sayfası", "", () => Ctx.Navigate("dava", null)),
                     Ui.Btn("Emanet / Masraf", "", () => Ctx.Navigate("emanet", null))));
         _sayacBtn = Ui.Btn("▶ Sayaç Başlat", "", SayacDegistir);
@@ -42,7 +62,12 @@ public class DosyaKartiPage : BasePage
         info.Top(_bilgi);
         info.Fill(_ozet);
         Top(info);
-        Fill(_t);
+        _dosyaBaslik.Margin = new Thickness(0, 0, 0, 6);
+        DockPanel.SetDock(_dosyaBaslik, Dock.Top);
+        DockPanel.SetDock(_tDosya, Dock.Top); _tDosya.Margin = new Thickness(0, 0, 0, 10);
+        var govde = new DockPanel();
+        govde.Children.Add(_dosyaBaslik); govde.Children.Add(_tDosya); govde.Children.Add(_t);
+        Fill(govde);
 
         _t.MouseDoubleClick += (_, _) =>
         {
@@ -62,21 +87,54 @@ public class DosyaKartiPage : BasePage
 
     long Secili => (_combo.SelectedItem as ComboItem)?.Value is { } v ? Convert.ToInt64(v) : 0;
 
+    long MSecili => (_mcombo.SelectedItem as ComboItem)?.Value is { } v ? Convert.ToInt64(v) : 0;
+
     public override void Refresh()
     {
         _busy = true;
         try
         {
             var onceki = Hedef > 0 ? Hedef : Secili;
+            var mid = MSecili;
+            if (onceki > 0 && Db.One("SELECT muvekkil_id FROM davalar WHERE id=?", onceki) is { } dm)
+            {
+                if (Hedef > 0) mid = dm.L("muvekkil_id");            // başka sayfadan gelindi: o davanın müvekkiline geç
+                else if (mid > 0 && dm.L("muvekkil_id") != mid) onceki = 0;
+            }
             Hedef = 0;
-            _combo.Items.Clear();
-            foreach (var d in Db.Query("SELECT d.id, d.mahkeme_adi, d.esas_no, m.ad_soyad FROM davalar d LEFT JOIN muvekkiller m ON m.id=d.muvekkil_id ORDER BY d.id DESC"))
-                _combo.Items.Add(new ComboItem { Value = d.L("id"), Label = $"{d.S("mahkeme_adi")} {d.S("esas_no")} — {d.S("ad_soyad")}".Trim(' ', '—', ' ') });
-            var i = _combo.Items.Cast<ComboItem>().ToList().FindIndex(x => Convert.ToInt64(x.Value) == onceki);
-            _combo.SelectedIndex = i >= 0 ? i : (_combo.Items.Count > 0 ? 0 : -1);
+            _mcombo.Items.Clear();
+            _mcombo.Items.Add(new ComboItem { Value = 0L, Label = "— Tüm müvekkiller —" });
+            var cmp = StringComparer.Create(new System.Globalization.CultureInfo("tr-TR"), true);
+            foreach (var m in Db.Query("SELECT id, ad_soyad, tc_no FROM muvekkiller").OrderBy(x => x.S("ad_soyad"), cmp))
+                _mcombo.Items.Add(new ComboItem { Value = m.L("id"), Label = $"{m.S("ad_soyad")} ({m.S("tc_no")})" });
+            var mi = _mcombo.Items.Cast<ComboItem>().ToList().FindIndex(x => Convert.ToInt64(x.Value) == mid);
+            _mcombo.SelectedIndex = mi >= 0 ? mi : 0;
+            DavaDoldur(onceki);
         }
         finally { _busy = false; }
         Yukle();
+    }
+
+    /// <summary>Seçili müvekkilin davalarını hem listeye hem dava kutusuna doldurur.</summary>
+    void DavaDoldur(long sec)
+    {
+        var mid = MSecili;
+        var rows = mid > 0
+            ? Db.Query("SELECT d.*, m.ad_soyad FROM davalar d LEFT JOIN muvekkiller m ON m.id=d.muvekkil_id WHERE d.muvekkil_id=? ORDER BY d.id DESC", mid)
+            : Db.Query("SELECT d.*, m.ad_soyad FROM davalar d LEFT JOIN muvekkiller m ON m.id=d.muvekkil_id ORDER BY d.id DESC");
+        _combo.Items.Clear();
+        foreach (var d in rows)
+            _combo.Items.Add(new ComboItem { Value = d.L("id"), Label = $"{d.S("mahkeme_adi")} {d.S("esas_no")} — {d.S("ad_soyad")}".Trim(' ', '—', ' ') });
+        _dosyaBaslik.Text = mid > 0 ? $"Müvekkilin dava dosyaları ({rows.Count})" : $"Tüm dava dosyaları ({rows.Count})";
+        _tDosya.Load(rows);
+        var i = _combo.Items.Cast<ComboItem>().ToList().FindIndex(x => Convert.ToInt64(x.Value) == sec);
+        _combo.SelectedIndex = i >= 0 ? i : (_combo.Items.Count > 0 ? 0 : -1);
+        DosyaSec(Secili);
+    }
+
+    void DosyaSec(long id)
+    {
+        if (id > 0) _tDosya.SelectId(id);
     }
 
     static Row Satir(string tarih, string tur, string aciklama, string tutar = "", string tablo = "", long kid = 0, string yol = "") => new()
@@ -90,7 +148,7 @@ public class DosyaKartiPage : BasePage
     {
         SayacYaz();
         var id = Secili;
-        if (id == 0) { _bilgi.Text = "Dava seçin ya da önce 'Dava & Müvekkil Takibi'nde dava ekleyin."; _ozet.Text = ""; _t.Load(new List<Row>()); return; }
+        if (id == 0) { _bilgi.Text = "Dava seçin ya da önce 'Dava Takibi'nde dava ekleyin."; _ozet.Text = ""; _t.Load(new List<Row>()); return; }
         var d = Db.One("SELECT d.*, m.ad_soyad, m.telefon FROM davalar d LEFT JOIN muvekkiller m ON m.id=d.muvekkil_id WHERE d.id=?", id);
         if (d == null) return;
         var kapali = d.S("kapanis_tarihi").Length > 0;
