@@ -10,7 +10,7 @@ public class YardimPage : BasePage
     {
         ("Hızlı başlangıç",
          "1) Ayarlar'da Telegram bot bilgilerinizi ve UETS hesabınızı girin.\n" +
-         "2) 'Müvekkil & Finans'te müvekkil ekleyin, 'Dava & Müvekkil Takibi'nde dava açın.\n" +
+         "2) 'Müvekkil' menüsünde müvekkil ekleyin (müvekkile tıklayınca cari hesabı açılır), 'Dava Takibi'nde dava açın.\n" +
          "3) 'Bireysel UETS Takibi'nde UETS'i açın, giriş yapın, tebligatları UETS'in İNDİR özelliğiyle indirin. İndirilen PDF/UDF/resim otomatik işlenir.\n" +
          "4) Tebligat satırında '⏱ İş Listesine Ekle'ye basın, süreyi katalogdan seçin; son tarih hesaplanır ve süreli iş olarak kaydolur.\n" +
          "5) Her gün 'Ofis Dashboard' sayfasının üst bölümüne (bugünün işleri) bakın."),
