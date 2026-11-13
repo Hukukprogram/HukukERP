@@ -267,8 +267,8 @@ public class MainWindow : Window
             ("⚖️  HUKUK OFİSİ (BİREYSEL)", new (string, string, BasePage)[]
             {
                 ("ofis_dash", "▦  Ofis Dashboard", new DashboardPage(_ctx, "avukat")),
-                ("muvekkil", "💼  Müvekkil & Finans (Cari)", new MuvekkilFinansPage(_ctx)),
-                ("dava", "📁  Dava & Müvekkil Takibi", new DavaPage(_ctx)),
+                ("muvekkil", "💼  Müvekkil", new MuvekkilFinansPage(_ctx)),
+                ("dava", "📁  Dava Takibi", new DavaPage(_ctx)),
                 ("dosya_karti", "📂  Dosya Kartı", new DosyaKartiPage(_ctx)),
                 ("emanet", "🏦  Emanet Hesabı", new EmanetPage(_ctx)),
                 ("ajanda", "📅  Ajanda (Takvim)", new AjandaPage(_ctx)),
