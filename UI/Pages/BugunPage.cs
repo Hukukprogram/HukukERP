@@ -80,14 +80,22 @@ public class BugunPage : BasePage
             _cAjanda.AddRow(Ui.Text($"{r.S("saat")} {r.S("baslik")} {r.S("mahkeme")}".Trim(), 13, false, "text", true), new Pill(r.S("tur"), "info"), "muted");
 
         _cTeb.Clear();
-        var tb = Db.Query("SELECT * FROM genel_tebligatlar WHERE durum=? ORDER BY id DESC LIMIT 10", Workflows.QAvukat);
+        var tb = Db.Query("SELECT * FROM genel_tebligatlar WHERE durum=? ORDER BY teblig_tarihi DESC, id DESC LIMIT 10", Workflows.QAvukat);
         if (tb.Count == 0) _cTeb.AddEmpty("Bekleyen tebligat yok");
         foreach (var r in tb)
         {
             var t = Utils.ParseDate(r.S("teblig_tarihi"));
             int? k = t == null ? null : (t.Value.AddDays(IsSureleri.ETebligatGunu).Date - DateTime.Today).Days;
-            var ek = t == null ? "" : $"\nOtomatik tebliğ: {t.Value.AddDays(IsSureleri.ETebligatGunu):dd.MM.yyyy}";
-            _cTeb.AddRow(Ui.Text($"{r.S("gonderen_kurum")} {r.S("esas_no")}\n{r.S("konu")}{ek}", 13, false, "text", true), Pill_(k), Renk(k));
+            var ek = t == null ? "" : $"\nUETS'e ulaştı: {t.Value:dd.MM.yyyy} • tebliğ sayılacağı gün: {t.Value.AddDays(IsSureleri.ETebligatGunu):dd.MM.yyyy}";
+            var baslik = $"{r.S("gonderen_kurum")} {r.S("esas_no")}".Trim();
+            if (baslik.Length == 0) baslik = "(kurum okunamadı)";
+            // Tebliğ günü geçmişse bu bir "gecikme" değil: tebligat tebliğ edilmiş sayılmıştır; yapılacak iş süreli iş girmek ya da kaydı işlendi yapmaktır.
+            UIElement pill = k == null ? new Pill("Tarih yok", "muted")
+                : k > 1 ? new Pill($"{k} gün sonra tebliğ", k <= 3 ? "warn" : "info")
+                : k == 1 ? new Pill("Yarın tebliğ sayılır", "warn")
+                : k == 0 ? new Pill("Bugün tebliğ sayıldı", "warn")
+                : new Pill($"Tebliğ sayıldı ({-k} gün önce)", "muted");
+            _cTeb.AddRow(Ui.Text($"{baslik}\n{r.S("konu")}{ek}", 13, false, "text", true), pill, k != null && k >= 0 && k <= 1 ? "warn" : "muted");
         }
 
         _cTahsilat.Clear();
