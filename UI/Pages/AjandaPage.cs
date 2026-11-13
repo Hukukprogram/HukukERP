@@ -125,6 +125,7 @@ public class AjandaPage : BasePage
     TbBtn? _araBtn;
     DateTime? _secGun;      // ay görünümünde seçili (ilk tıklanan) gün
     Border? _secHucre;
+    Action? _secGeri;       // gün/hafta/yıl görünümlerinde seçimi geri alır
 
     static SolidColorBrush Hex(string h) => new((Color)ColorConverter.ConvertFromString(h));
 
@@ -236,7 +237,7 @@ public class AjandaPage : BasePage
         Ekle("Bugüne git", () => { _cur = DateTime.Today; Render(); });
         Ekle("Yeni etkinlik…", () => Yeni(DateTime.Today, ""));
         Ekle("Yazdır…", Yazdir);
-        Ekle("Dava & Müvekkil sayfasına git", () => Ctx.Navigate("dava", null));
+        Ekle("Dava Takibi sayfasına git", () => Ctx.Navigate("dava", null));
         m.IsOpen = true;
     }
 
@@ -649,13 +650,24 @@ public class AjandaPage : BasePage
                 foreach (var (p, ln) in pills) { Canvas.SetLeft(p, ln * w + 2); p.Width = Math.Max(10, w - 4); }
             };
             var dd = d;
+            if (_secGun == dd.Date) { cv.Background = Theme.Alpha("sel", 150); _secGeri = () => cv.Background = Brushes.Transparent; }
+            // İlk tıklama günü seçer (renk değişir), aynı güne ikinci tıklama yeni kayıt penceresini açar.
             cv.MouseLeftButtonDown += (_, e) =>
             {
-                if (e.ClickCount != 2) return;
-                double y = e.GetPosition(cv).Y;
-                int min = (int)(h0 * 60 + y / H * 60);
-                min = min / 15 * 15;
-                Yeni(dd, $"{min / 60}:{min % 60:00}");
+                if (_secGun == dd.Date)
+                {
+                    double y = e.GetPosition(cv).Y;
+                    int min = (int)(h0 * 60 + y / H * 60);
+                    min = min / 15 * 15;
+                    _secGun = null; _secGeri = null;
+                    cv.Background = Brushes.Transparent;
+                    Yeni(dd, $"{min / 60}:{min % 60:00}");
+                    return;
+                }
+                _secGeri?.Invoke();
+                _secGun = dd.Date;
+                cv.Background = Theme.Alpha("sel", 150);
+                _secGeri = () => cv.Background = Brushes.Transparent;
             };
             if (d == DateTime.Today)
             {
@@ -709,7 +721,19 @@ public class AjandaPage : BasePage
                 else if (tatil.Contains(d)) { t.Foreground = Hex("#107C41"); }
                 else t.SetResourceReference(TextBlock.ForegroundProperty, "text");
                 var dd = d;
-                t.MouseLeftButtonUp += (_, _) => { _cur = dd; _g = Gor.Gun; Render(); };
+                var f0 = t.Foreground; var b0 = t.Background;
+                void Boya() { t.Background = Theme.B("accent"); t.Foreground = Brushes.White; }
+                void Geri() { t.Background = b0; t.Foreground = f0; }
+                if (_secGun == dd.Date) { Boya(); _secGeri = Geri; }
+                // İlk tıklama günü seçer (renk değişir), aynı güne ikinci tıklama o günün görünümünü açar.
+                t.MouseLeftButtonUp += (_, _) =>
+                {
+                    if (_secGun == dd.Date) { _secGun = null; _secGeri = null; _cur = dd; _g = Gor.Gun; Render(); return; }
+                    _secGeri?.Invoke();
+                    _secGun = dd.Date;
+                    Boya();
+                    _secGeri = Geri;
+                };
                 gu.Children.Add(t);
             }
             kart.Children.Add(gu);
