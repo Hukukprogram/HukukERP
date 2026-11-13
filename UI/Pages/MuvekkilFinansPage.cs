@@ -1,76 +1,217 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using HukukErp.Core;
 using HukukErp.Services;
 using Microsoft.Data.Sqlite;
 
 namespace HukukErp.UI.Pages;
 
-/// <summary>Müvekkiller & Finansal Takip (iki sekme).</summary>
+/// <summary>Müvekkil: liste (arama + sıralama) → müvekkile tıklayınca cari hesap, vekaletnameler ve dava dosyaları.</summary>
 public class MuvekkilFinansPage : BasePage
 {
-    readonly TabControl _tabs = new();
+    static readonly string[] Siralar =
+        { "Ad Soyad (A → Z)", "Ad Soyad (Z → A)", "T.C. No", "Kalan bakiye (çoktan aza)", "Dava sayısı (çoktan aza)", "Son eklenen" };
+
     readonly DataTable _tM = new(("T.C. No", "tc_no", null), ("Ad Soyad", "ad_soyad", null), ("Telefon", "telefon", null), ("E-posta", "eposta", null),
-        ("Vekaletname", "vek", null), ("Kayıt", "kayit_tarihi", Fmt.Date));
-    readonly DataTable _tF = new(("Müvekkil", "etiket", null), ("Dava Dosyası", "dava_etiket", null), ("Dosya Konusu", "dosya_konusu", null), ("Toplam Ücret", "toplam_ucret", Fmt.Money),
+        ("Dava", "dsay", null), ("Vekaletname", "vek", null), ("Kalan Bakiye", "kalan", Fmt.Money));
+    readonly DataTable _tF = new(("Dava Dosyası", "dava_etiket", null), ("Dosya Konusu", "dosya_konusu", null), ("Toplam Ücret", "toplam_ucret", Fmt.Money),
         ("Alınan", "alinan_tutar", Fmt.Money), ("Kalan Bakiye", "kalan_bakiye", Fmt.Money), ("Sonraki Tahsilat", "sonraki_tahsilat_tarihi", Fmt.Date),
         ("Makbuz", "makbuz_kesildi", v => v != null && Convert.ToInt64(v) != 0 ? "Kesildi" : "Bekliyor"));
     readonly DataTable _tV = new(("Tarih", "tarih", Fmt.Date), ("Tür", "tur", null), ("Bağlı Dava", "dava", null), ("Açıklama", "aciklama", null), ("Dosya", "dosya", null));
-    readonly TextBlock _vTitle = Ui.H2("Vekaletnameler — müvekkil seçin");
+    readonly DataTable _tDv = new(("Mahkeme", "mahkeme_adi", null), ("Esas No", "esas_no", null), ("Tür", "dava_turu", null),
+        ("Karşı Taraf", "karsi_taraf", null), ("Duruşma", "durusma_tarihi", Fmt.Date), ("Aşama", "asama_durum", null));
+    readonly TextBlock _vTitle = Ui.H2("Vekaletnameler");
     readonly TextBlock _fSum = Ui.Muted("");
     readonly TextBlock _hTitle = Ui.H2("Tahsilat hareketleri — cari kaydı seçin");
     readonly DataTable _tH = new(("Tahsilat Tarihi", "tarih", Fmt.Date), ("Tutar", "tutar", Fmt.Money), ("Açıklama", "aciklama", null));
     readonly TextBlock _hSum = Ui.Muted("");
-    // gruplama: müvekkile göre / dava dosyasına göre
-    readonly DataTable _tGM = new(("Müvekkil", "ad", null), ("Dosya", "dosya", null), ("Toplam", "toplam", Fmt.Money), ("Alınan", "alinan", Fmt.Money),
-        ("Masraf", "masraf", Fmt.Money), ("Kalan", "kalan", Fmt.Money));
-    readonly DataTable _tGD = new(("Dava Dosyası", "ad", null), ("Müvekkil", "muv", null), ("Toplam", "toplam", Fmt.Money), ("Alınan", "alinan", Fmt.Money),
-        ("Masraf", "masraf", Fmt.Money), ("Kalan", "kalan", Fmt.Money));
-    readonly ContentControl _grpHost = new();
-    Button? _bModM, _bModD;
-    bool _modDava;
+    readonly TextBlock _dTitle = Ui.H2("");
+    readonly TextBlock _dSub = Ui.Muted("");
+    readonly TextBlock _sayi = Ui.Muted("");
+    readonly TextBox _ara = new() { Width = 300, Margin = new Thickness(0, 0, 8, 0), ToolTip = "Ad soyad, T.C. no, telefon veya e-posta ile ara" };
+    readonly ComboBox _sira = new() { MinWidth = 220, Margin = new Thickness(0, 0, 8, 0) };
+    readonly ContentControl _host = new();
+    readonly TabControl _tabs = new();
+    UIElement _liste = null!, _detay = null!;
+    Row? _mSel;
+    long _sid;
     bool _busy;
 
     public MuvekkilFinansPage(AppCtx ctx) : base(ctx)
     {
-        Top(Ui.PageHeader("Müvekkiller & Finansal Takip"));
-        _tabs.Items.Add(Ui.Tab("Müvekkil Kartları & Vekaletnameler", BuildMuvekkil()));
-        _tabs.Items.Add(Ui.Tab("Cari Hesap & Tahsilat", BuildFinans()));
-        _tabs.SelectionChanged += (o, e) => { if (e.OriginalSource == _tabs) Refresh(); };
-        Fill(_tabs);
+        Top(Ui.PageHeader("Müvekkil", "Listeden müvekkile tıklayın: cari hesap, vekaletnameler ve dava dosyaları açılır"));
+        _liste = BuildListe();
+        _detay = BuildDetay();
+        _host.Content = _liste;
+        Fill(_host);
+
+        foreach (var s in Siralar) _sira.Items.Add(s);
+        _sira.SelectedIndex = 0;
+        _sira.SelectionChanged += (_, _) => { if (!_busy) ListeYukle(); };
+        _ara.TextChanged += (_, _) => { if (!_busy) ListeYukle(); };
+
+        _tM.PreviewMouseLeftButtonUp += (_, e) => { if (SatirdaMi(e.OriginalSource as DependencyObject)) Ac(_tM.Current); };
+        _tM.PreviewKeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Enter) { Ac(_tM.Current); e.Handled = true; } };
         _tF.SelectionChanged += (_, _) => { if (!_busy) LoadHareket(); };
-        _tM.SelectionChanged += (_, _) => { if (!_busy) LoadVekalet(); };
         _tV.MouseDoubleClick += (_, _) => VekAc();
-        _tGM.SelectionChanged += (_, _) => { if (!_busy && !_modDava) { LoadCari(); LoadHareket(); } };
-        _tGD.SelectionChanged += (_, _) => { if (!_busy && _modDava) { LoadCari(); LoadHareket(); } };
+        _tDv.MouseDoubleClick += (_, _) => DosyaKartinaGit();
     }
 
-    public void YeniMuvekkil() => AddM();
+    static bool SatirdaMi(DependencyObject? d)
+    {
+        while (d != null)
+        {
+            if (d is DataGridRow) return true;
+            if (d is System.Windows.Controls.Primitives.DataGridColumnHeader || d is System.Windows.Controls.Primitives.ScrollBar) return false;
+            d = d is Visual || d is System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
+        }
+        return false;
+    }
 
+    public void YeniMuvekkil() { Geri(); AddM(); }
+
+    /// <summary>Kısayoldan gelinir: müvekkil seçtirir, cari hesabını açar, tahsilat ekler.</summary>
     public void TahsilatEkle()
     {
-        _tabs.SelectedIndex = 1;
-        Refresh();
+        if (Db.ScalarL("SELECT COUNT(*) FROM muvekkiller") == 0) { Ui.Info(this, "Önce müvekkil ekleyin."); return; }
+        long id = _sid;
+        if (id == 0)
+        {
+            var ms = TrSirala(Db.Query("SELECT id, ad_soyad, tc_no FROM muvekkiller"));
+            var v = FormDialog.Ask(this, "Tahsilat girişi — müvekkil seçin", new List<Field>
+            {
+                new("muvekkil_id", "Müvekkil", "combo", ms.Select(m => ((object?)m.L("id"), $"{m.S("ad_soyad")} ({m.S("tc_no")})")), required: true),
+            });
+            if (v == null) return;
+            id = Convert.ToInt64(v["muvekkil_id"]);
+        }
+        Ac(Db.One("SELECT * FROM muvekkiller WHERE id=?", id));
+        _tabs.SelectedIndex = 0;
         if (_tF.Current == null && _tF.Rows.Count > 0) _tF.SelectFirst();
         if (_tF.Current != null) Tahsilat(); else AddF();
     }
 
-    // ------------------------------------------------------------ müvekkil
-    UIElement BuildMuvekkil()
+    static List<Row> TrSirala(List<Row> l)
     {
-        var top = new DockPanel();
-        var b = Ui.HRow(Ui.Btn("＋ Müvekkil", "Primary", AddM), Ui.Btn("Düzenle", "", EditM), Ui.Btn("Sil", "Danger", DelM));
-        b.Margin = new Thickness(0, 8, 0, 0);
-        DockPanel.SetDock(b, Dock.Bottom);
-        top.Children.Add(b); top.Children.Add(_tM);
+        var cmp = StringComparer.Create(new CultureInfo("tr-TR"), true);
+        return l.OrderBy(x => x.S("ad_soyad"), cmp).ToList();
+    }
 
-        var bot = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
+    // ------------------------------------------------------------ liste
+    UIElement BuildListe()
+    {
+        var dock = new DockPanel();
+        var bar = Ui.HRow(Ui.Btn("＋ Müvekkil", "Primary", AddM), Ui.Muted("Ara:", false), _ara, Ui.Muted("Sırala:", false), _sira);
+        bar.Margin = new Thickness(0, 0, 0, 8);
+        DockPanel.SetDock(bar, Dock.Top);
+        DockPanel.SetDock(_sayi, Dock.Bottom); _sayi.Margin = new Thickness(0, 6, 0, 0);
+        dock.Children.Add(bar); dock.Children.Add(_sayi); dock.Children.Add(_tM);
+        return dock;
+    }
+
+    void ListeYukle()
+    {
+        var rows = Db.Query("SELECT m.*, (SELECT COUNT(*) FROM vekaletnameler v WHERE v.muvekkil_id=m.id) AS vsay, " +
+                            "(SELECT COUNT(*) FROM davalar d WHERE d.muvekkil_id=m.id) AS dsay, " +
+                            "(SELECT COALESCE(SUM(f.kalan_bakiye),0) FROM finans_tahsilat f WHERE f.muvekkil_id=m.id) AS kalan FROM muvekkiller m");
+        var toplam = rows.Count;
+        foreach (var m in rows) m["vek"] = m.L("vsay") > 0 ? $"✔ {m.L("vsay")} adet" : "—";
+        var q = Utils.TrLower(_ara.Text.Trim());
+        if (q.Length > 0)
+            rows = rows.Where(m => Utils.TrLower($"{m.S("ad_soyad")} {m.S("tc_no")} {m.S("telefon")} {m.S("eposta")}").Contains(q)).ToList();
+        var cmp = StringComparer.Create(new CultureInfo("tr-TR"), true);
+        rows = _sira.SelectedIndex switch
+        {
+            1 => rows.OrderByDescending(x => x.S("ad_soyad"), cmp).ToList(),
+            2 => rows.OrderBy(x => x.S("tc_no"), StringComparer.Ordinal).ToList(),
+            3 => rows.OrderByDescending(x => x.D("kalan")).ThenBy(x => x.S("ad_soyad"), cmp).ToList(),
+            4 => rows.OrderByDescending(x => x.L("dsay")).ThenBy(x => x.S("ad_soyad"), cmp).ToList(),
+            5 => rows.OrderByDescending(x => x.L("id")).ToList(),
+            _ => rows.OrderBy(x => x.S("ad_soyad"), cmp).ToList(),
+        };
+        _tM.Load(rows, new() { ["kalan"] = r => r.D("kalan") > 0 ? "warn" : "muted" });
+        _sayi.Text = q.Length > 0 ? $"{rows.Count} / {toplam} müvekkil" : $"{toplam} müvekkil";
+    }
+
+    // ------------------------------------------------------------ detay (müvekkile tıklayınca)
+    UIElement BuildDetay()
+    {
+        var dock = new DockPanel();
+        var bar = Ui.HRow(Ui.Btn("← Müvekkil listesi", "", Geri), Ui.Btn("Düzenle", "", EditM), Ui.Btn("Sil", "Danger", DelM));
+        bar.Margin = new Thickness(0, 0, 0, 8);
+        DockPanel.SetDock(bar, Dock.Top);
+        DockPanel.SetDock(_dTitle, Dock.Top); DockPanel.SetDock(_dSub, Dock.Top);
+        _dSub.Margin = new Thickness(0, 0, 0, 8);
+        dock.Children.Add(bar); dock.Children.Add(_dTitle); dock.Children.Add(_dSub);
+        _tabs.Items.Add(Ui.Tab("Cari Hesap & Tahsilat", BuildFinans()));
+        _tabs.Items.Add(Ui.Tab("Vekaletnameler", BuildVekalet()));
+        _tabs.Items.Add(Ui.Tab("Dava Dosyaları", BuildDavalar()));
+        dock.Children.Add(_tabs);
+        return dock;
+    }
+
+    void Ac(Row? m)
+    {
+        if (m == null) return;
+        _mSel = Db.One("SELECT * FROM muvekkiller WHERE id=?", m.L("id"));
+        if (_mSel == null) return;
+        _sid = _mSel.L("id");
+        _host.Content = _detay;
+        DetayYukle();
+    }
+
+    void Geri()
+    {
+        _sid = 0; _mSel = null;
+        _host.Content = _liste;
+        Refresh();
+    }
+
+    void DetayYukle()
+    {
+        if (_mSel == null) return;
+        _dTitle.Text = $"{_mSel.S("ad_soyad")} • T.C. {_mSel.S("tc_no")}";
+        _dSub.Text = string.Join("  •  ", new[] { _mSel.S("telefon"), _mSel.S("eposta"), _mSel.S("adres") }.Where(s => s.Length > 0));
+        LoadVekalet();
+        LoadCari();
+        LoadHareket();
+        LoadDavalar();
+    }
+
+    UIElement BuildVekalet()
+    {
+        var bot = new DockPanel();
         DockPanel.SetDock(_vTitle, Dock.Top); _vTitle.Margin = new Thickness(0, 0, 0, 6);
         var vb = Ui.HRow(Ui.Btn("＋ Vekalet Ekle", "Ok", VekEkle), Ui.Btn("Aç", "", VekAc), Ui.Btn("Düzenle", "", VekDuzenle), Ui.Btn("Sil", "Danger", VekSil));
         vb.Margin = new Thickness(0, 6, 0, 0);
         DockPanel.SetDock(vb, Dock.Bottom);
         bot.Children.Add(_vTitle); bot.Children.Add(vb); bot.Children.Add(_tV);
-        return Ui.VSplit(top, bot, 3, 2);
+        return bot;
+    }
+
+    UIElement BuildDavalar()
+    {
+        var d = new DockPanel();
+        var b = Ui.HRow(Ui.Btn("📂 Dosya Kartı", "Ok", DosyaKartinaGit), Ui.Btn("📁 Dava Takibi", "", () => Ctx.Navigate("dava", null)));
+        b.Margin = new Thickness(0, 6, 0, 0);
+        DockPanel.SetDock(b, Dock.Bottom);
+        d.Children.Add(b); d.Children.Add(_tDv);
+        return d;
+    }
+
+    void LoadDavalar()
+    {
+        _tDv.Load(Db.Query("SELECT * FROM davalar WHERE muvekkil_id=? ORDER BY id DESC", _sid),
+            new() { ["durusma_tarihi"] = r => Ui.DeadlineKind(r.S("durusma_tarihi")) });
+    }
+
+    void DosyaKartinaGit()
+    {
+        var c = _tDv.Current;
+        if (c == null) { Ui.Info(this, "Önce listeden bir dava seçin."); return; }
+        DosyaKartiPage.Hedef = c.L("id");
+        Ctx.Navigate("dosya_karti", null);
     }
 
     // ---- vekaletnameler (müvekkil başına birden fazla)
@@ -93,7 +234,7 @@ public class MuvekkilFinansPage : BasePage
 
     void VekEkle()
     {
-        var m = _tM.Current;
+        var m = _mSel;
         if (m == null) { Ui.Info(this, "Önce müvekkil seçin."); return; }
         var v = FormDialog.Ask(this, $"Vekalet ekle — {m.S("ad_soyad")}", VFields(m.L("id")));
         if (v == null) return;
@@ -102,7 +243,7 @@ public class MuvekkilFinansPage : BasePage
 
     void VekDuzenle()
     {
-        var m = _tM.Current; var r = _tV.Current;
+        var m = _mSel; var r = _tV.Current;
         if (m == null || r == null) return;
         var v = FormDialog.Ask(this, "Vekaleti düzenle", VFields(m.L("id")), r);
         if (v == null) return;
@@ -137,7 +278,7 @@ public class MuvekkilFinansPage : BasePage
 
     void LoadVekalet()
     {
-        var m = _tM.Current;
+        var m = _mSel;
         if (m == null) { _vTitle.Text = "Vekaletnameler — müvekkil seçin"; _tV.Load(new()); return; }
         var rows = Db.Query("SELECT v.*, TRIM(COALESCE(d.mahkeme_adi,'') || ' ' || COALESCE(d.esas_no,'')) AS dava FROM vekaletnameler v " +
                             "LEFT JOIN davalar d ON d.id=v.dava_id WHERE v.muvekkil_id=? ORDER BY v.tarih DESC, v.id DESC", m.L("id"));
@@ -184,7 +325,7 @@ public class MuvekkilFinansPage : BasePage
 
     void EditM()
     {
-        var m = _tM.Current;
+        var m = _mSel;
         if (m == null) return;
         var v = FormDialog.Ask(this, "Müvekkili Düzenle", MFields(false), m);
         if (v == null) return;
@@ -195,44 +336,13 @@ public class MuvekkilFinansPage : BasePage
 
     void DelM()
     {
-        var m = _tM.Current;
-        if (m != null && Ui.Confirm(this, $"{m.S("ad_soyad")} ve cari kayıtları silinsin mi?")) { Db.Delete("muvekkiller", m.L("id")); Refresh(); }
+        var m = _mSel;
+        if (m != null && Ui.Confirm(this, $"{m.S("ad_soyad")} ve cari kayıtları silinsin mi?")) { Db.Delete("muvekkiller", m.L("id")); Geri(); }
     }
 
     // ------------------------------------------------------------ finans
-    DataTable Grp => _modDava ? _tGD : _tGM;
-
-    void ModSec(bool dava)
-    {
-        _modDava = dava;
-        _grpHost.Content = Grp;
-        Aktif(_bModM, !dava);
-        Aktif(_bModD, dava);
-        LoadCari();
-        LoadHareket();
-    }
-
-    static void Aktif(Button? b, bool on)
-    {
-        if (b == null) return;
-        if (on && Application.Current.TryFindResource("Primary") is Style st) b.Style = st;
-        else b.ClearValue(FrameworkElement.StyleProperty);
-    }
-
     UIElement BuildFinans()
     {
-        // sol: gruplama
-        _bModM = Ui.Btn("Müvekkile göre", "Primary", () => ModSec(false));
-        _bModD = Ui.Btn("Dava dosyasına göre", "", () => ModSec(true));
-        var mod = Ui.HRow(_bModM, _bModD);
-        mod.Margin = new Thickness(0, 0, 0, 8);
-        var left = new DockPanel();
-        DockPanel.SetDock(mod, Dock.Top);
-        left.Children.Add(mod);
-        _grpHost.Content = _tGM;
-        left.Children.Add(_grpHost);
-
-        // sağ: cari kayıtlar + hareketler
         var top = new DockPanel();
         var tb = Ui.HRow(Ui.Btn("＋ Cari Kayıt", "Primary", AddF), Ui.Btn("Düzenle", "", EditF), Ui.Btn("Sil", "Danger", DelF));
         tb.Margin = new Thickness(0, 6, 0, 0);
@@ -247,9 +357,7 @@ public class MuvekkilFinansPage : BasePage
         DockPanel.SetDock(hb, Dock.Bottom);
         DockPanel.SetDock(_hSum, Dock.Bottom); _hSum.Margin = new Thickness(0, 6, 0, 0);
         bot.Children.Add(_hTitle); bot.Children.Add(hb); bot.Children.Add(_hSum); bot.Children.Add(_tH);
-        var right = Ui.VSplit(top, bot, 3, 2);
-        right.Margin = new Thickness(10, 0, 0, 0);
-        return Ui.HSplit(left, right, 4, 7);
+        return Ui.VSplit(top, bot, 3, 2);
     }
 
     List<Field> FFields(bool yeni)
@@ -304,19 +412,8 @@ public class MuvekkilFinansPage : BasePage
     void AddF()
     {
         if (Db.ScalarL("SELECT COUNT(*) FROM muvekkiller") == 0) { Ui.Info(this, "Önce müvekkil ekleyin."); return; }
-        // seçili gruba göre ön doldurma
         var ilk = new Dictionary<string, object?>();
-        var g = Grp.Current;
-        if (g != null && g.L("id") > 0)
-        {
-            if (_modDava)
-            {
-                ilk["dava_id"] = g.L("id");
-                var mid = Db.One("SELECT muvekkil_id FROM davalar WHERE id=?", g.L("id"))?.L("muvekkil_id") ?? 0;
-                if (mid > 0) ilk["muvekkil_id"] = mid;
-            }
-            else ilk["muvekkil_id"] = g.L("id");
-        }
+        if (_sid > 0) ilk["muvekkil_id"] = _sid;
         var alanlar = FFields(true);
         var v = FormDialog.Ask(this, "Yeni Cari Kayıt", alanlar, ilk);
         while (v != null && !DavaUyumla(v)) v = FormDialog.Ask(this, "Yeni Cari Kayıt", alanlar, v);
@@ -351,68 +448,23 @@ public class MuvekkilFinansPage : BasePage
         if (r != null && Ui.Confirm(this, "Cari kayıt ve tüm tahsilat hareketleri silinsin mi?")) { Db.Delete("finans_tahsilat", r.L("id")); Refresh(); }
     }
 
-    const string MasrafM = "(SELECT COALESCE(SUM(x.tutar),0) FROM dava_masraflari x JOIN davalar dd ON dd.id=x.dava_id WHERE dd.muvekkil_id=m.id)";
-
-    void GrupYukle()
-    {
-        // müvekkile göre
-        var gm = Db.Query("SELECT m.id, m.ad_soyad || ' (' || m.tc_no || ')' AS ad, COUNT(f.id) AS dosya, COALESCE(SUM(f.toplam_ucret),0) AS toplam, " +
-                          "COALESCE(SUM(f.alinan_tutar),0) AS alinan, COALESCE(SUM(f.kalan_bakiye),0) AS kalan, " + MasrafM + " AS masraf " +
-                          "FROM muvekkiller m LEFT JOIN finans_tahsilat f ON f.muvekkil_id=m.id GROUP BY m.id ORDER BY kalan DESC, m.ad_soyad");
-        gm.Insert(0, ToplamSatir("▸ Tümü", gm.Sum(x => x.D("toplam")), gm.Sum(x => x.D("alinan")), gm.Sum(x => x.D("kalan")), gm.Sum(x => x.D("masraf")), gm.Sum(x => x.L("dosya"))));
-        _tGM.Load(gm, new() { ["kalan"] = r => r.D("kalan") > 0 ? "warn" : "muted" });
-        if (_tGM.Current == null) _tGM.SelectFirst();
-
-        // dava dosyasına göre
-        var gd = Db.Query("SELECT d.id, TRIM(d.mahkeme_adi || ' ' || d.esas_no) AS ad, COALESCE(m.ad_soyad,'') AS muv, " +
-                          "(SELECT COALESCE(SUM(f.toplam_ucret),0) FROM finans_tahsilat f WHERE f.dava_id=d.id) AS toplam, " +
-                          "(SELECT COALESCE(SUM(f.alinan_tutar),0) FROM finans_tahsilat f WHERE f.dava_id=d.id) AS alinan, " +
-                          "(SELECT COALESCE(SUM(f.kalan_bakiye),0) FROM finans_tahsilat f WHERE f.dava_id=d.id) AS kalan, " +
-                          "(SELECT COALESCE(SUM(x.tutar),0) FROM dava_masraflari x WHERE x.dava_id=d.id) AS masraf " +
-                          "FROM davalar d LEFT JOIN muvekkiller m ON m.id=d.muvekkil_id ORDER BY kalan DESC, d.id DESC");
-        var bag = Db.One("SELECT COALESCE(SUM(toplam_ucret),0) AS toplam, COALESCE(SUM(alinan_tutar),0) AS alinan, COALESCE(SUM(kalan_bakiye),0) AS kalan " +
-                         "FROM finans_tahsilat WHERE dava_id IS NULL OR dava_id=0") ?? new Row();
-        var tum = ToplamSatir("▸ Tümü", Db.ScalarD("SELECT SUM(toplam_ucret) FROM finans_tahsilat"), Db.ScalarD("SELECT SUM(alinan_tutar) FROM finans_tahsilat"),
-                              Db.ScalarD("SELECT SUM(kalan_bakiye) FROM finans_tahsilat"), Db.ScalarD("SELECT SUM(tutar) FROM dava_masraflari"), 0);
-        tum["muv"] = "";
-        var bagsiz = ToplamSatir("▸ Dava dosyasına bağlı olmayan", bag.D("toplam"), bag.D("alinan"), bag.D("kalan"), 0, 0);
-        bagsiz["id"] = 0L; bagsiz["muv"] = "";
-        gd.Insert(0, bagsiz); gd.Insert(0, tum);
-        _tGD.Load(gd, new() { ["kalan"] = r => r.D("kalan") > 0 ? "warn" : "muted" });
-        if (_tGD.Current == null) _tGD.SelectFirst();
-    }
-
-    static Row ToplamSatir(string ad, double toplam, double alinan, double kalan, double masraf, long dosya) => new()
-    {
-        ["id"] = -1L, ["ad"] = ad, ["toplam"] = toplam, ["alinan"] = alinan, ["kalan"] = kalan, ["masraf"] = masraf, ["dosya"] = dosya,
-    };
-
     void LoadCari()
     {
-        var g = Grp.Current;
-        var where = "";
-        var ps = new List<object?>();
-        if (g != null && g.L("id") >= 0)
-        {
-            if (_modDava)
-            {
-                if (g.L("id") == 0) where = "WHERE f.dava_id IS NULL OR f.dava_id=0";
-                else { where = "WHERE f.dava_id=?"; ps.Add(g.L("id")); }
-            }
-            else { where = "WHERE f.muvekkil_id=?"; ps.Add(g.L("id")); }
-        }
-        var fs = Db.Query("SELECT f.*, m.ad_soyad || ' (' || m.tc_no || ')' AS etiket, TRIM(COALESCE(d.mahkeme_adi,'') || ' ' || COALESCE(d.esas_no,'')) AS dava_etiket " +
-                          "FROM finans_tahsilat f JOIN muvekkiller m ON m.id=f.muvekkil_id LEFT JOIN davalar d ON d.id=f.dava_id " + where +
-                          " ORDER BY f.sonraki_tahsilat_tarihi='' , f.sonraki_tahsilat_tarihi", ps.ToArray());
+        if (_sid == 0) { _tF.Load(new()); _fSum.Text = ""; return; }
+        var fs = Db.Query("SELECT f.*, TRIM(COALESCE(d.mahkeme_adi,'') || ' ' || COALESCE(d.esas_no,'')) AS dava_etiket " +
+                          "FROM finans_tahsilat f LEFT JOIN davalar d ON d.id=f.dava_id WHERE f.muvekkil_id=? " +
+                          "ORDER BY f.sonraki_tahsilat_tarihi='' , f.sonraki_tahsilat_tarihi", _sid);
+        foreach (var f in fs) if (f.S("dava_etiket").Length == 0) f["dava_etiket"] = "— genel cari —";
         var bak = _busy;
         _busy = true;
         try
         {
             _tF.Load(fs, new() { ["sonraki_tahsilat_tarihi"] = r => r.D("kalan_bakiye") > 0 ? Ui.DeadlineKind(r.S("sonraki_tahsilat_tarihi")) : "muted" });
+            if (_tF.Current == null) _tF.SelectFirst();
         }
         finally { _busy = bak; }
-        var masraf = g != null ? g.D("masraf") : 0;
-        _fSum.Text = (g != null ? $"{g.S("ad")}  •  " : "") + $"Toplam ücret: {Utils.FmtMoney(fs.Sum(r => r.D("toplam_ucret")))}  •  Alınan: {Utils.FmtMoney(fs.Sum(r => r.D("alinan_tutar")))}  •  " +
+        var masraf = Db.ScalarD("SELECT COALESCE(SUM(x.tutar),0) FROM dava_masraflari x JOIN davalar dd ON dd.id=x.dava_id WHERE dd.muvekkil_id=?", _sid);
+        _fSum.Text = $"Toplam ücret: {Utils.FmtMoney(fs.Sum(r => r.D("toplam_ucret")))}  •  Alınan: {Utils.FmtMoney(fs.Sum(r => r.D("alinan_tutar")))}  •  " +
                      $"Kalan: {Utils.FmtMoney(fs.Sum(r => r.D("kalan_bakiye")))}" + (masraf > 0 ? $"  •  Dava masrafları: {Utils.FmtMoney(masraf)}" : "");
     }
 
@@ -425,7 +477,7 @@ public class MuvekkilFinansPage : BasePage
             _tH.Load(new()); _hSum.Text = "";
             return;
         }
-        _hTitle.Text = $"Tahsilat hareketleri — {r.S("etiket")} • {r.S("dosya_konusu")}";
+        _hTitle.Text = $"Tahsilat hareketleri — {_mSel?.S("ad_soyad")} • {r.S("dosya_konusu")}";
         var rows = Db.Query("SELECT * FROM tahsilat_hareketleri WHERE finans_id=? ORDER BY tarih='' , tarih DESC, id DESC", r.L("id"));
         _tH.Load(rows);
         _hSum.Text = $"{rows.Count} tahsilat • Toplam alınan: {Utils.FmtMoney(rows.Sum(x => x.D("tutar")))} • Kalan bakiye: {Utils.FmtMoney(r.D("kalan_bakiye"))}";
@@ -445,7 +497,7 @@ public class MuvekkilFinansPage : BasePage
             new("tarih", "Tahsilat Tarihi", "date", def: Utils.TodayIso()), new("tutar", "Tutar", "money", required: true),
             new("aciklama", "Açıklama (nakit / havale / çek…)"), new("sonraki", "Sonraki tahsilat tarihi", "date", def: r.S("sonraki_tahsilat_tarihi")),
         };
-        var v = FormDialog.Ask(this, $"Tahsilat — {r.S("etiket")}", fields);
+        var v = FormDialog.Ask(this, $"Tahsilat — {_mSel?.S("ad_soyad")}", fields);
         if (v == null || Convert.ToDouble(v["tutar"]) <= 0) return;
         var sonraki = (string)v["sonraki"]!;
         v.Remove("sonraki");
@@ -485,14 +537,14 @@ public class MuvekkilFinansPage : BasePage
             // eski tek-PDF alanını vekaletnameler listesine bir kez taşı
             Db.Execute("INSERT INTO vekaletnameler (muvekkil_id, tur, tarih, dosya_yolu) SELECT m.id, 'Genel vekaletname', m.kayit_tarihi, m.vekaletname_yolu " +
                        "FROM muvekkiller m WHERE m.vekaletname_yolu!='' AND NOT EXISTS (SELECT 1 FROM vekaletnameler v WHERE v.muvekkil_id=m.id)");
-            var ms = Db.Query("SELECT m.*, (SELECT COUNT(*) FROM vekaletnameler v WHERE v.muvekkil_id=m.id) AS vsay FROM muvekkiller m ORDER BY m.ad_soyad");
-            foreach (var m in ms) m["vek"] = m.L("vsay") > 0 ? $"✔ {m.L("vsay")} adet" : "—";
-            _tM.Load(ms);
-            GrupYukle();
+            ListeYukle();
         }
         finally { _busy = false; }
-        LoadVekalet();
-        LoadCari();
-        LoadHareket();
+        if (_sid > 0 && ReferenceEquals(_host.Content, _detay))
+        {
+            _mSel = Db.One("SELECT * FROM muvekkiller WHERE id=?", _sid);
+            if (_mSel == null) { _sid = 0; _host.Content = _liste; }
+            else DetayYukle();
+        }
     }
 }
