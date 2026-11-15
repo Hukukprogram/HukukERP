@@ -149,6 +149,16 @@ CREATE TABLE IF NOT EXISTS bildirim_log (
 CREATE INDEX IF NOT EXISTS ix_teb_tip_durum ON genel_tebligatlar(hesap_tipi, durum);
 CREATE INDEX IF NOT EXISTS ix_teb_hash ON genel_tebligatlar(dosya_hash);
 CREATE INDEX IF NOT EXISTS ix_masraf_dava ON dava_masraflari(dava_id);
+CREATE TABLE IF NOT EXISTS cop_kutusu (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tablo TEXT NOT NULL,
+    kayit_id INTEGER DEFAULT 0,
+    veri TEXT DEFAULT '',
+    ozet TEXT DEFAULT '',
+    ust_id INTEGER DEFAULT 0,
+    ek TEXT DEFAULT '',
+    silinme TEXT DEFAULT (datetime('now','localtime'))
+);
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     zaman TEXT DEFAULT (datetime('now','localtime')),
@@ -234,6 +244,33 @@ CREATE INDEX IF NOT EXISTS ix_evrak_dava ON dava_evraklari(dava_id);
             "Ben {{ad_soyad}} (T.C. {{tc_no}}); {{dosya_konusu}} konusundaki tüm hak ve alacaklarımı " +
             "tam ve eksiksiz olarak aldığımı, bu nedenle karşı tarafı ve vekilini ibra ettiğimi, " +
             "herhangi bir talebimin kalmadığını beyan ve kabul ederim.\n\n{{tarih}}\n\n{{ad_soyad}}"),
+    };
+
+    /// <summary>Sonradan eklenen şablonlar: adı kayıtlı değilse eklenir (kullanıcının düzenlediği şablonlara dokunulmaz). Taslaktır; avukat kontrol edip uyarlamalıdır.</summary>
+    public static readonly (string Ad, string Tip, string Metin)[] EkSablonlar =
+    {
+        ("İhtarname (Alacak / Ödeme)", "docx",
+            "İHTARNAME\n\nKeşideci (İhtar Eden): {{ad_soyad}} (T.C. {{tc_no}})\nAdres: {{adres}}\n\nMuhatap: ……………………………………\nAdres: ……………………………………\n\n" +
+            "KONU: {{dosya_konusu}} nedeniyle alacağın ödenmesi ihtarıdır.\n\n" +
+            "AÇIKLAMALAR:\n1- ……………………………… tarihli ……………………………… nedeniyle muhatap tarafıma ……………… TL borçludur.\n" +
+            "2- Borç vadesinde ödenmemiştir; muhatap temerrüde düşmüştür.\n\n" +
+            "SONUÇ VE İSTEM: İşbu ihtarnamenin tebliğinden itibaren ……… gün içinde ……………… TL asıl alacağın işlemiş ve işleyecek faiziyle birlikte ödenmesini, aksi halde yasal yollara başvurulacağını, bu durumda doğacak yargılama gideri ve vekalet ücretinin de muhataba ait olacağını ihtar ederim.\n\n{{tarih}}\n\n{{ad_soyad}}"),
+        ("Cevap Dilekçesi", "docx",
+            "…………………… MAHKEMESİ'NE\n\nDOSYA NO: ……… E.\n\nDAVALI: {{ad_soyad}} (T.C. {{tc_no}})\nDAVACI: ……………………………………\nKONU: {{dosya_konusu}} hakkında cevaplarımın sunulmasından ibarettir.\n\n" +
+            "AÇIKLAMALAR:\n1- Süre ve görev/yetki itirazları: ………………………………\n2- Zamanaşımı ve diğer itirazlar: ………………………………\n3- Esasa ilişkin cevaplar: ………………………………\n4- Deliller: ………………………………\n\n" +
+            "SONUÇ VE İSTEM: Haksız ve hukuki dayanaktan yoksun davanın reddine, yargılama gideri ve vekalet ücretinin davacıya yükletilmesine karar verilmesini saygıyla arz ve talep ederim.\n\n{{tarih}}\n\nDavalı Vekili Av. ……………………"),
+        ("Dava Dilekçesi (Genel)", "docx",
+            "…………………… MAHKEMESİ'NE\n\nDAVACI: {{ad_soyad}} (T.C. {{tc_no}})\nADRES: {{adres}}\nVEKİLİ: Av. ……………………\nDAVALI: ……………………………………\nKONU: {{dosya_konusu}}\nDEĞER: ……………… TL\n\n" +
+            "AÇIKLAMALAR:\n1- ………………………………\n2- ………………………………\n\nHUKUKİ NEDENLER: ………………………………\nDELİLLER: ………………………………\n\n" +
+            "SONUÇ VE İSTEM: Yukarıda açıklanan nedenlerle davanın kabulüne, yargılama gideri ve vekalet ücretinin davalıya yükletilmesine karar verilmesini saygıyla arz ve talep ederim.\n\n{{tarih}}\n\nDavacı Vekili Av. ……………………"),
+        ("Süre Uzatım / Mühlet Talebi", "docx",
+            "…………………… MAHKEMESİ'NE\n\nDOSYA NO: ……… E.\nTALEPTE BULUNAN: {{ad_soyad}}\nKONU: Ek süre talebidir.\n\n" +
+            "AÇIKLAMALAR: Dosyada verilen ……… günlük süre ……………… tarihinde sona ermektedir. ……………… nedeniyle işlemlerin tamamlanabilmesi için ……… gün ek süre verilmesini saygıyla arz ve talep ederim.\n\n{{tarih}}\n\nVekili Av. ……………………"),
+        ("Vekaletten Çekilme Bildirimi", "docx",
+            "VEKALETTEN ÇEKİLME BİLDİRİMİ\n\nSayın {{ad_soyad}},\n\n{{dosya_konusu}} konusundaki vekalet görevimden, Avukatlık Kanunu ve ilgili mevzuat uyarınca ………………… tarihi itibarıyla çekilmiş bulunmaktayım. " +
+            "Vekaletin sona ermesine rağmen müvekkilin haklarının zarar görmemesi için gereken süre boyunca zorunlu işlemler yapılacaktır; dosyadaki işlemler, süreler ve belgeler hakkında bilgi ………… tarihinde teslim edilecektir.\n\n{{tarih}}\n\nAv. ……………………"),
+        ("Müvekkil Bilgilendirme Mektubu", "docx",
+            "Sayın {{ad_soyad}},\n\n{{dosya_konusu}} konulu dosyanızla ilgili gelişmeler:\n\n- Son durum: ………………………………\n- Bir sonraki işlem / duruşma: ………………………………\n- Sizden beklenen belge veya bilgi: ………………………………\n- Ücret ve ödeme durumu: Toplam ücret {{toplam_ucret}}; ödeme planı: {{odeme_plani}}\n\nSorularınız için bana ulaşabilirsiniz.\n\nSaygılarımla,\n{{tarih}}\nAv. ……………………"),
     };
 }
 
@@ -359,6 +396,10 @@ public class Db
             foreach (var (ad, tip, metin) in Schema.DefaultTemplates)
                 Execute("INSERT INTO sablonlar (sablon_adi, sablon_tipi, taslak_metin) VALUES (?,?,?)", ad, tip, metin);
 
+        foreach (var (ad, tip, metin) in Schema.EkSablonlar)
+            if (ScalarL("SELECT COUNT(*) FROM sablonlar WHERE sablon_adi=?", ad) == 0)
+                Execute("INSERT INTO sablonlar (sablon_adi, sablon_tipi, taslak_metin) VALUES (?,?,?)", ad, tip, metin);
+
         Execute("DELETE FROM sablonlar WHERE sablon_adi LIKE 'Maaş Haczi Cevap%'");
         if (!Query("PRAGMA table_info(sureler)").Any(r => r.S("name") == "tebligat_id"))
             Execute("ALTER TABLE sureler ADD COLUMN tebligat_id INTEGER DEFAULT 0");
@@ -454,8 +495,83 @@ public class Db
 
     public void Delete(string table, long id)
     {
+        try { if (!CopHaric.Contains(table)) { var satir = One($"SELECT * FROM {table} WHERE id=?", id); if (satir != null) Arsivle(table, satir, 0); } }
+        catch (Exception) { /* arşivlenemezse silme yine de yapılır */ }
         Execute($"DELETE FROM {table} WHERE id=?", id);
         Audit(table, id, "Silme", "");
+    }
+
+    // --- çöp kutusu: silinen kayıt (ve bağlı alt kayıtları) 60 gün saklanır, geri alınabilir
+    static readonly HashSet<string> CopHaric = new() { "audit_log", "bildirim_log", "ayarlar", "cop_kutusu" };
+    static readonly Dictionary<string, (string Tablo, string Fk)[]> AltKayit = new()
+    {
+        ["muvekkiller"] = new[] { ("vekaletnameler", "muvekkil_id"), ("finans_tahsilat", "muvekkil_id") },
+        ["finans_tahsilat"] = new[] { ("tahsilat_hareketleri", "finans_id") },
+        ["davalar"] = new[] { ("dava_masraflari", "dava_id") },
+    };
+
+    static string CopOzet(string tablo, Row r)
+    {
+        foreach (var k in new[] { "ad_soyad", "baslik", "konu", "dosya_konusu", "sablon_adi", "ad" })
+            if (r.S(k).Length > 0) return r.S(k);
+        if (tablo == "davalar") return $"{r.S("mahkeme_adi")} {r.S("esas_no")}".Trim();
+        return tablo + " #" + r.L("id");
+    }
+
+    long Arsivle(string tablo, Row satir, long ust)
+    {
+        var temiz = new Dictionary<string, object?>();
+        foreach (var kv in satir) temiz[kv.Key] = kv.Value is DBNull ? null : kv.Value;
+        var ek = "";
+        if (tablo == "muvekkiller")
+            ek = System.Text.Json.JsonSerializer.Serialize(Query("SELECT id FROM davalar WHERE muvekkil_id=?", satir.L("id")).Select(d => d.L("id")).ToList());
+        var copId = Execute("INSERT INTO cop_kutusu (tablo, kayit_id, veri, ozet, ust_id, ek) VALUES (?,?,?,?,?,?)",
+                            tablo, satir.L("id"), System.Text.Json.JsonSerializer.Serialize(temiz), CopOzet(tablo, satir), ust, ek);
+        if (AltKayit.TryGetValue(tablo, out var altlar))
+            foreach (var (at, fk) in altlar)
+                foreach (var a in Query($"SELECT * FROM {at} WHERE {fk}=?", satir.L("id"))) Arsivle(at, a, copId);
+        return copId;
+    }
+
+    /// <summary>Çöp kutusundaki kaydı (ve alt kayıtlarını) geri yükler. Başarısızsa hata fırlatır.</summary>
+    public void CopGeriAl(long copId)
+    {
+        var c = One("SELECT * FROM cop_kutusu WHERE id=?", copId) ?? throw new InvalidOperationException("Kayıt çöp kutusunda bulunamadı.");
+        Yukle(c);
+        var ek = c.S("ek");
+        if (c.S("tablo") == "muvekkiller" && ek.Length > 0)
+            foreach (var did in System.Text.Json.JsonSerializer.Deserialize<List<long>>(ek) ?? new())
+                Execute("UPDATE davalar SET muvekkil_id=? WHERE id=? AND muvekkil_id IS NULL", c.L("kayit_id"), did);
+        CopSil(copId);
+
+        void Yukle(Row cr)
+        {
+            var d = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(cr.S("veri")) ?? new();
+            var v = new Dictionary<string, object?>();
+            foreach (var kv in d)
+                v[kv.Key] = kv.Value.ValueKind switch
+                {
+                    System.Text.Json.JsonValueKind.String => kv.Value.GetString(),
+                    System.Text.Json.JsonValueKind.Number => kv.Value.TryGetInt64(out var l) ? l : kv.Value.GetDouble(),
+                    System.Text.Json.JsonValueKind.True => 1L,
+                    System.Text.Json.JsonValueKind.False => 0L,
+                    _ => null,
+                };
+            Insert(cr.S("tablo"), v);
+            foreach (var alt in Query("SELECT * FROM cop_kutusu WHERE ust_id=? ORDER BY id", cr.L("id"))) Yukle(alt);
+        }
+    }
+
+    /// <summary>Çöp kutusu kaydını (alt kayıtlarıyla) kalıcı siler.</summary>
+    public void CopSil(long copId)
+    {
+        foreach (var alt in Query("SELECT id FROM cop_kutusu WHERE ust_id=?", copId)) CopSil(alt.L("id"));
+        Execute("DELETE FROM cop_kutusu WHERE id=?", copId);
+    }
+
+    public void CopuTemizle(int gun = 60)
+    {
+        foreach (var r in Query("SELECT id FROM cop_kutusu WHERE ust_id=0 AND silinme < datetime('now','localtime', ?)", $"-{gun} day")) CopSil(r.L("id"));
     }
 
     // --- denetim izi: kim değil, ne/ne zaman (tek kullanıcılı program). Şifre içerebilecek ayarlar tablosu kaydedilmez.
