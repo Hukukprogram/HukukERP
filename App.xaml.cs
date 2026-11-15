@@ -11,6 +11,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        if (e.Args.Contains("--ekran-goruntusu")) { EkranModu(e.Args); return; }
         ShutdownMode = ShutdownMode.OnExplicitShutdown;   // parola penceresi kapanınca program kapanmasın
         Config.EskiVeriyiAktar();
         var cfg = new Config();
@@ -77,5 +78,37 @@ public partial class App : Application
         win.Show();
         ShutdownMode = ShutdownMode.OnMainWindowClose;
         _ = Guncelleme.KontrolEtAsync(cfg, win);
+    }
+
+    /// <summary>GitHub Actions için: geçici, boş bir veri klasörüyle (kullanıcı verisine dokunmadan) örnek verili ekranların PNG'lerini üretir.</summary>
+    async void EkranModu(string[] args)
+    {
+        try
+        {
+            var i = Array.IndexOf(args, "--ekran-goruntusu");
+            var cikis = Path.GetFullPath(i + 1 < args.Length ? args[i + 1] : "ekran");
+            Directory.CreateDirectory(cikis);
+            var dir = Path.Combine(Path.GetTempPath(), "hukukerp_ekran_" + Guid.NewGuid().ToString("N")[..8]);
+            Directory.CreateDirectory(dir);
+            var cfg = new Config(Path.Combine(dir, "config.json"));
+            cfg.Set("db_path", Path.Combine(dir, "hukuk.db"));
+            Theme.Apply(args.Contains("--acik") ? "light" : "dark");
+            var db = new Db(cfg.DbPath);
+            Ui.Db = db;
+            try
+            {
+                var m = db.Insert("muvekkiller", new Dictionary<string, object?> { ["ad_soyad"] = "Örnek Müvekkil", ["tc_no"] = "10000000146", ["telefon"] = "0555 000 00 00" });
+                var d = db.Insert("davalar", new Dictionary<string, object?> { ["mahkeme_adi"] = "Ankara 5. Asliye Hukuk Mahkemesi", ["esas_no"] = "2026/123 E.", ["karsi_taraf"] = "Örnek A.Ş.", ["durusma_tarihi"] = Utils.AddDays(Utils.TodayIso(), 6), ["muvekkil_id"] = m });
+                db.Insert("sureler", new Dictionary<string, object?> { ["baslik"] = "Cevap dilekçesi süresi (örnek)", ["son_tarih"] = Utils.AddDays(Utils.TodayIso(), 3), ["durum"] = "Açık", ["dava_id"] = d });
+                db.Insert("gorevler", new Dictionary<string, object?> { ["baslik"] = "Bilirkişi raporunu incele (örnek)", ["durum"] = "Yapılacak", ["son_tarih"] = Utils.AddDays(Utils.TodayIso(), 1) });
+            }
+            catch (Exception) { /* örnek veri eklenemese de boş ekranlar alınır */ }
+            var win = new MainWindow(db, cfg) { Width = 1500, Height = 900 };
+            MainWindow = win;
+            win.Show();
+            await win.EkranGoruntuleriAl(cikis);
+        }
+        catch (Exception ex) { try { File.WriteAllText("ekran_hata.txt", ex.ToString()); } catch { } }
+        Environment.Exit(0);
     }
 }
