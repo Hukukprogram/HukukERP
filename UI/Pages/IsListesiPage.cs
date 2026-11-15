@@ -25,7 +25,7 @@ public class IsListesiPage : BasePage
         _filtre.SelectionChanged += (_, _) => { if (!_busy) Refresh(); };
         _ara.TextChanged += (_, _) => { if (!_busy) Refresh(); };
 
-        Top(Ui.HRow(Ui.Btn("＋ Yeni İş", "Primary", Ekle), Ui.Btn("⚖ Tebligat Süresi Ekle (Katalog)", "Primary", KatalogEkle), Ui.Btn("Düzenle", "", Duzenle),
+        Top(Ui.HRow(Ui.Btn("＋ Yeni İş", "Primary", Ekle), Ui.Btn("⚖ Tebligat Süresi Ekle (Katalog)", "Primary", KatalogEkle), Ui.Btn("Düzenle", "", Duzenle), Ui.Btn("🔍 Hesap Dökümü", "", Dokum),
                     Ui.Btn("✔ Tamamlandı", "Ok", () => DurumYap("Tamamlandı")), Ui.Btn("↺ Yeniden Aç", "", () => DurumYap("Açık")),
                     Ui.Btn("Sil", "Danger", Sil)));
         Top(Ui.HRow(Ui.Muted("Göster:", false), _filtre, Ui.Muted("Ara:", false), _ara,
@@ -178,6 +178,40 @@ public class IsListesiPage : BasePage
         if (v == null) return;
         Db.Update("sureler", c.L("id"), v);
         Refresh();
+    }
+
+    /// <summary>Seçili sürenin nasıl hesaplandığını gösterir ve katalogla yeniden hesaplayıp karşılaştırır.</summary>
+    void Dokum()
+    {
+        var c = _t.Current;
+        if (c == null) { Ui.Info(this, "Önce bir iş seçin."); return; }
+        var r = Db.One("SELECT * FROM sureler WHERE id=?", c.L("id"));
+        if (r == null) return;
+        var sb = new System.Text.StringBuilder();
+        var son = Utils.ParseDate(r.S("son_tarih"));
+        var bas = Utils.ParseDate(r.S("baslangic"));
+        sb.AppendLine($"İş: {r.S("baslik")}");
+        if (r.S("dayanak").Length > 0) sb.AppendLine($"Dayanak: {r.S("dayanak")}");
+        sb.AppendLine($"Başlangıç (tebliğ günü): {(bas != null ? bas.Value.ToString("dd.MM.yyyy dddd", Utils.Tr) : "kayıtlı değil")}");
+        sb.AppendLine($"Kayıtlı son gün: {(son != null ? son.Value.ToString("dd.MM.yyyy dddd", Utils.Tr) : "-")}");
+        sb.AppendLine($"E-tebligatta UETS'e ulaşmanın {IsSureleri.ETebligatGunu}. günü tebliğ sayılır; süre bu günden işler.");
+        if (son != null && IsSureleri.TatilMi(son.Value))
+            sb.AppendLine("\nUYARI: Kayıtlı son gün hafta sonu ya da resmî tatile denk geliyor. Süre ilk iş gününe uzar; tarihi kontrol edin.");
+        var idx = IsSureleri.EnIyiEslesme($"{r.S("baslik")} {r.S("dayanak")}");
+        if (idx >= 0 && bas != null && IsSureleri.Liste()[idx].Sure != null)
+        {
+            var t = IsSureleri.Liste()[idx];
+            var sn = IsSureleri.Hesapla(t, bas.Value, false);
+            sb.AppendLine($"\nOlası katalog eşleşmesi: {t.Ad} • {t.Kanun}");
+            sb.AppendLine("Yeniden hesap: " + sn.Son.ToString("dd.MM.yyyy dddd", Utils.Tr));
+            sb.AppendLine(sn.Aciklama);
+            if (t.Not.Length > 0) sb.AppendLine("Not: " + t.Not);
+            sb.AppendLine(son != null && sn.Son.Date == son.Value.Date ? "\nSonuç: Kayıtlı son gün yeniden hesapla AYNI ✔" : "\nSonuç: Kayıtlı son gün yeniden hesaptan FARKLI. Tarih elle değiştirilmiş ya da eşleşme yanlış olabilir; kontrol edin.");
+        }
+        else sb.AppendLine("\nBu iş katalogla eşleşmedi ya da süresi elle girilmiş; yeniden hesap yapılamadı.");
+        if (r.S("notlar").Length > 0) sb.AppendLine("\nKayıtlı notlar:\n" + r.S("notlar"));
+        sb.AppendLine("\nHesap yardımcıdır; adli tatil, tebligat usulü ve özel hükümler için süreyi kendiniz de doğrulayın.");
+        Ui.Info(this, sb.ToString(), "Süre hesap dökümü");
     }
 
     void DurumYap(string durum)
