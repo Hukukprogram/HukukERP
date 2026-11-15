@@ -124,3 +124,32 @@ public class DosyaOkumaTestleri
         finally { if (File.Exists(yol)) File.Delete(yol); }
     }
 }
+
+public class HesapParametreTestleri
+{
+    [Fact]
+    public void Vekalet_IlkDilim_YuzdeOnAlti()
+    {
+        var p = HesapParametreleri.Varsayilan();
+        Assert.Equal(128000, p.NispiVekalet(800000), 2);          // 800.000 × %16
+        Assert.Equal(128000 + 120000, p.NispiVekalet(1600000), 2); // + 800.000 × %15
+    }
+
+    [Fact]
+    public void Faiz_OzelOran_BirYil()
+    {
+        var p = HesapParametreleri.Varsayilan();
+        var s = p.Faiz(100000, new DateTime(2025, 1, 1), new DateTime(2026, 1, 1), 10);
+        Assert.Equal(10000, s.Sum(x => x.Tutar), 2);
+    }
+
+    [Fact]
+    public void Faiz_YasalOran_DonemdeParcalanir()
+    {
+        var p = HesapParametreleri.Varsayilan();
+        var s = p.Faiz(100000, new DateTime(2026, 7, 1), new DateTime(2026, 8, 31), null);
+        Assert.Equal(2, s.Count);              // 31.07.2026'da oran değişir
+        Assert.Equal(24, s[0].Yuzde);
+        Assert.Equal(31, s[1].Yuzde);
+    }
+}
