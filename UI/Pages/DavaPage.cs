@@ -8,7 +8,7 @@ namespace HukukErp.UI.Pages;
 /// <summary>Dava Takibi: müvekkil listesi → seçili müvekkilin davaları → aşamalar, masraflar, notlar.</summary>
 public class DavaPage : BasePage
 {
-    static readonly string[] Asamalar = { "Dava Dilekçesi", "Cevap Dilekçesi", "Cevaba Cevap", "İkinci Cevap", "Tahkikat / Delil", "Bilirkişi", "Karar Aşaması", "Karara Çıktı" };
+    public static readonly string[] Asamalar = { "Dava Dilekçesi", "Cevap Dilekçesi", "Cevaba Cevap", "İkinci Cevap", "Tahkikat / Delil", "Bilirkişi", "Karar Aşaması", "Karara Çıktı" };
     static readonly (string Key, string Ad, string Dayanak)[] Hmk =
     {
         ("dava_dilekcesi_tarih", "Dava Dilekçesi", "HMK 119"), ("cevap_dilekcesi_tarih", "Cevap Dilekçesi", "HMK 127 (2 hafta)"),
