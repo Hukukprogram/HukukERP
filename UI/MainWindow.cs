@@ -78,6 +78,8 @@ public class MainWindow : Window
     readonly List<string> _keys = new();
     readonly Dictionary<string, NavButton> _nav = new();
     readonly List<NavButton> _navList = new();
+    readonly Dictionary<string, Action> _ac = new();   // kapalı menü grubunu açan eylemler
+    TextBox? _araKutu;
     readonly ContentControl _host = new();
     readonly TextBlock _lblDb = Ui.Muted("", false);
     readonly ContentControl _tgHolder = new();
@@ -107,13 +109,64 @@ public class MainWindow : Window
             Navigate = Navigate,
         };
         Build(0);
+        try { _db.CopuTemizle(); } catch (Exception) { }
         Timers();
         Closing += (_, _) => { try { Yedekleme.Yap(_db, _cfg); } catch { } };
         PreviewKeyDown += (_, e) =>
         {
-            if (e.Key == Key.K && (Keyboard.Modifiers & ModifierKeys.Control) != 0) { e.Handled = true; KomutPaletiAc(); }
+            if ((Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
+            if (e.Key == Key.K) { e.Handled = true; KomutPaletiAc(); }
+            else if (e.Key == Key.F) { e.Handled = true; _araKutu?.Focus(); _araKutu?.SelectAll(); }
+            else if (e.Key == Key.N) { e.Handled = true; HizliEkleAc(null); }
         };
         Loaded += (_, _) => IlkKurulum();
+    }
+
+    // ---------------------------------------------------------------- hızlı ekle ve üst arama
+    void HizliEkleAc(FrameworkElement? hedef)
+    {
+        var m = new ContextMenu();
+        void Ekle(string ad, string sayfa, string eylem)
+        {
+            var mi = new MenuItem { Header = ad };
+            mi.Click += (_, _) => Navigate(sayfa, eylem);
+            m.Items.Add(mi);
+        }
+        Ekle("Yeni müvekkil", "muvekkil", "YeniMuvekkil");
+        Ekle("Yeni dava", "dava", "YeniDava");
+        Ekle("Yeni süreli iş", "is_listesi", "YeniIs");
+        Ekle("Katalogdan tebligat süresi", "is_listesi", "KatalogtanSure");
+        Ekle("Yeni görev", "kanban", "YeniGorev");
+        Ekle("Tahsilat girişi", "muvekkil", "TahsilatEkle");
+        if (hedef != null) { m.PlacementTarget = hedef; m.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom; }
+        else { m.Placement = System.Windows.Controls.Primitives.PlacementMode.Center; m.PlacementTarget = _host; }
+        m.IsOpen = true;
+    }
+
+    UIElement UstArama()
+    {
+        var kutu = new TextBox { Width = 380, Padding = new Thickness(10, 6, 10, 6), VerticalContentAlignment = VerticalAlignment.Center,
+                                 ToolTip = "Müvekkil, T.C., esas no, kurum, konu, not… (Ctrl+F)" };
+        _araKutu = kutu;
+        var ipucu = Ui.Muted("🔎  Müvekkil, esas no, kurum ara…   Ctrl+F", false);
+        ipucu.IsHitTestVisible = false;
+        ipucu.Margin = new Thickness(12, 0, 0, 0);
+        ipucu.VerticalAlignment = VerticalAlignment.Center;
+        kutu.TextChanged += (_, _) => ipucu.Visibility = kutu.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        kutu.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter) return;
+            var q = kutu.Text.Trim();
+            if (q.Length < 2) return;
+            AramaPage.Sorgu = q;
+            kutu.Clear();
+            Navigate("arama", null);
+            e.Handled = true;
+        };
+        var g = new Grid();
+        g.Children.Add(kutu);
+        g.Children.Add(ipucu);
+        return g;
     }
 
     // ---------------------------------------------------------------- komut paleti
@@ -218,7 +271,7 @@ public class MainWindow : Window
 
         var outer = new DockPanel { LastChildFill = true };
 
-        // üst durum çubuğu
+        // üst çubuk: arama + hızlı ekle + durum
         var top = new Border { BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(18, 8, 18, 8) };
         top.SetResourceReference(Border.BackgroundProperty, "surface");
         top.SetResourceReference(Border.BorderBrushProperty, "border");
@@ -228,6 +281,17 @@ public class MainWindow : Window
         DockPanel.SetDock(_status, Dock.Right);
         _status.Margin = new Thickness(0, 0, 16, 0);
         topDock.Children.Add(_status);
+        var arama = UstArama();
+        DockPanel.SetDock(arama, Dock.Left);
+        topDock.Children.Add(arama);
+        Button? hizli = null;
+        hizli = Ui.Btn("＋  Hızlı ekle", "Primary", () => HizliEkleAc(hizli));
+        hizli.Margin = new Thickness(10, 0, 0, 0);
+        hizli.ToolTip = "Yeni müvekkil, dava, süre, görev, tahsilat (Ctrl+N)";
+        DockPanel.SetDock(hizli, Dock.Left);
+        topDock.Children.Add(hizli);
+        _lblDb.Margin = new Thickness(16, 0, 0, 0);
+        _lblDb.VerticalAlignment = VerticalAlignment.Center;
         topDock.Children.Add(_lblDb);
         top.Child = topDock;
         DockPanel.SetDock(top, Dock.Top);
@@ -255,85 +319,76 @@ public class MainWindow : Window
         DockPanel.SetDock(_banner, Dock.Top);
         outer.Children.Add(_banner);
 
-        // sol menü
-        var side = new Border { Width = 280 };
+        // sol menü: ana bölüm açık, diğerleri katlanabilir
+        _ac.Clear();
+        var side = new Border { Width = 250 };
         side.SetResourceReference(Border.BackgroundProperty, "sidebar");
-        var sideStack = new StackPanel { Margin = new Thickness(14) };
+        var sideStack = new StackPanel { Margin = new Thickness(12) };
         var brand = new TextBlock { Text = "⚖  HukukERP", Foreground = Brushes.White, FontSize = 17, FontWeight = FontWeights.Bold, Margin = new Thickness(4, 6, 4, 6) };
         sideStack.Children.Add(brand);
 
-        var sections = new (string Title, (string Key, string Text, BasePage Page)[] Items)[]
+        var sections = new (string Title, bool Acik, (string Key, string Text, BasePage Page)[] Items)[]
         {
-            ("⚖️  HUKUK OFİSİ (BİREYSEL)", new (string, string, BasePage)[]
+            ("ÇALIŞMA", true, new (string, string, BasePage)[]
             {
                 ("ofis_dash", "▦  Ofis Dashboard", new DashboardPage(_ctx, "avukat")),
                 ("muvekkil", "💼  Müvekkil", new MuvekkilFinansPage(_ctx)),
                 ("dava", "📁  Dava Takibi", new DavaPage(_ctx)),
                 ("dosya_karti", "📂  Dosya Kartı", new DosyaKartiPage(_ctx)),
+                ("ajanda", "📅  Ajanda", new AjandaPage(_ctx)),
+                ("is_listesi", "⏱  İş Listesi (Süreler)", new IsListesiPage(_ctx)),
+                ("kanban", "✅  Görevler", new KanbanPage(_ctx)),
+                ("avukat_uets", "📬  Bireysel UETS", new UetsCenterPage(_ctx, "Sahsi")),
                 ("emanet", "🏦  Emanet Hesabı", new EmanetPage(_ctx)),
-                ("ajanda", "📅  Ajanda (Takvim)", new AjandaPage(_ctx)),
-                ("is_listesi", "⏱  İş Listesi (Süreli İşler)", new IsListesiPage(_ctx)),
-                ("kanban", "✅  Görevler (Kanban Board)", new KanbanPage(_ctx)),
-                ("avukat_uets", "📬  Bireysel UETS Takibi", new UetsCenterPage(_ctx, "Sahsi")),
             }),
-            ("🔎  ARAMA VE RAPORLAR", new (string, string, BasePage)[]
+            ("ARAMA VE RAPORLAR", false, new (string, string, BasePage)[]
             {
                 ("arama", "🔎  Genel Arama", new AramaPage(_ctx)),
-                ("emsal", "📚  Emsal & Notlar", new EmsalPage(_ctx)),
+                ("emsal", "📚  Emsal ve Notlar", new EmsalPage(_ctx)),
                 ("rapor", "📊  Raporlar", new RaporPage(_ctx)),
             }),
-            ("🧮  HESAPLAMALAR", new (string, string, BasePage)[]
+            ("HESAPLAMALAR", false, new (string, string, BasePage)[]
             {
+                ("hesap_araclari", "🧮  Faiz • Harç • Vekalet", new HesapAraclariPage(_ctx)),
                 ("hesap_iscilik", "👷  İşçilik Alacakları", HesaplamaMerkeziPage.Iscilik(_ctx)),
                 ("hesap_kaza", "🚗  Kaza Tazminatı", HesaplamaMerkeziPage.Kaza(_ctx)),
                 ("hesap_netbrut", "💱  Net ↔ Brüt", HesaplamaMerkeziPage.NetBrut(_ctx)),
                 ("hesaplamalar", "⛓  İnfaz Hesaplama", new HesaplamalarPage(_ctx)),
             }),
-            ("🛠  YARDIMCI PROGRAMLAR", new (string, string, BasePage)[]
+            ("ARAÇLAR VE BELGELER", false, new (string, string, BasePage)[]
             {
+                ("evrak", "📄  Sözleşme ve Evrak", new EvrakPage(_ctx)),
                 ("yardimci", "🛠  Dosya Dönüştürücüler", new YardimciProgramlarPage(_ctx)),
+                ("veri", "🗃  Veri Aktarımı ve KVKK", new VeriAktarimPage(_ctx)),
             }),
-            ("⚙️  SİSTEM VE AYARLAR", new (string, string, BasePage)[]
+            ("SİSTEM", true, new (string, string, BasePage)[]
             {
-                ("evrak", "📄  Sözleşme & Evrak (Şablonlar)", new EvrakPage(_ctx)),
-                ("veri", "🗃  Veri Aktarımı & KVKK", new VeriAktarimPage(_ctx)),
+                ("cop", "🗑  Çöp Kutusu", new CopKutusuPage(_ctx)),
                 ("yardim", "❓  Kullanım Kılavuzu", new YardimPage(_ctx)),
                 ("ayarlar", "⚙  Ayarlar", new AyarlarPage(_ctx)),
             }),
         };
 
+        var grey = new SolidColorBrush(Color.FromRgb(0x7d, 0x8a, 0xa3));
         int idx = 0;
-        foreach (var (title, items) in sections)
+        foreach (var (title, acik, items) in sections)
         {
-            var lab = new TextBlock { Text = title, Foreground = new SolidColorBrush(Color.FromRgb(0x7d, 0x8a, 0xa3)), FontSize = 11, FontWeight = FontWeights.Bold, Margin = new Thickness(6, 14, 6, 4) };
-            sideStack.Children.Add(lab);
-            NavButton? grup = null;
-            var cocuklar = new List<NavButton>();
+            var body = new StackPanel { Visibility = acik ? Visibility.Visible : Visibility.Collapsed };
+            var chev = new TextBlock { Text = acik ? "▾" : "▸", Foreground = grey, FontSize = 11, Margin = new Thickness(0, 0, 6, 0) };
+            var lab = new TextBlock { Text = title, Foreground = grey, FontSize = 11, FontWeight = FontWeights.Bold };
+            var head = new Border { Cursor = Cursors.Hand, Background = Brushes.Transparent, Margin = new Thickness(4, 14, 4, 4),
+                                    Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { chev, lab } } };
+            void Ayarla(bool ac) { body.Visibility = ac ? Visibility.Visible : Visibility.Collapsed; chev.Text = ac ? "▾" : "▸"; }
+            head.MouseLeftButtonUp += (_, _) => Ayarla(body.Visibility != Visibility.Visible);
+            sideStack.Children.Add(head);
+            sideStack.Children.Add(body);
             foreach (var (key, text, page) in items)
             {
-                if (key == "hesap_grup")
-                {
-                    grup = new NavButton("▾  " + text) { Margin = new Thickness(0, 1, 0, 1) };
-                    var g = grup;
-                    g.Clicked += () =>
-                    {
-                        bool ac = cocuklar.Count > 0 && cocuklar[0].Visibility != Visibility.Visible;
-                        foreach (var c in cocuklar) c.Visibility = ac ? Visibility.Visible : Visibility.Collapsed;
-                        g.SetText((ac ? "▾  " : "▸  ") + text);
-                    };
-                    sideStack.Children.Add(grup);
-                    continue;
-                }
                 var b = new NavButton(text) { Margin = new Thickness(0, 1, 0, 1) };
-                if (grup != null && (key.StartsWith("hesap_") || key == "hesaplamalar"))
-                {
-                    b.Margin = new Thickness(18, 1, 0, 1);
-                    b.Height = 34;
-                    cocuklar.Add(b);
-                }
                 int i = idx;
                 b.Clicked += () => Goto(i);
-                sideStack.Children.Add(b);
+                body.Children.Add(b);
+                _ac[key] = () => Ayarla(true);
                 _pages.Add(page); _keys.Add(key); _nav[key] = b; _navList.Add(b);
                 idx++;
             }
@@ -351,9 +406,34 @@ public class MainWindow : Window
     {
         _current = i;
         for (int k = 0; k < _navList.Count; k++) _navList[k].SetChecked(k == i);
+        if (_ac.TryGetValue(_keys[i], out var ac)) ac();
         _host.Content = _pages[i];
         _pages[i].Refresh();
         UpdateChrome();
+    }
+
+    /// <summary>Her sayfanın ekran görüntüsünü PNG olarak klasöre yazar (GitHub Actions ekran modu).</summary>
+    public async Task EkranGoruntuleriAl(string klasor)
+    {
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+        for (int i = 0; i < _keys.Count; i++)
+        {
+            try
+            {
+                Goto(i);
+                UpdateLayout();
+                await Task.Delay(700);
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+                var w = (int)ActualWidth; var h = (int)ActualHeight;
+                var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+                rtb.Render((Visual)Content);
+                var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(rtb));
+                using var fs = File.Create(System.IO.Path.Combine(klasor, $"{i + 1:00}_{_keys[i]}.png"));
+                enc.Save(fs);
+            }
+            catch (Exception ex) { File.AppendAllText(System.IO.Path.Combine(klasor, "hatalar.txt"), _keys[i] + ": " + ex.Message + "\n"); }
+        }
     }
 
     void Navigate(string key, string? action)
@@ -367,7 +447,7 @@ public class MainWindow : Window
 
     void UpdateChrome()
     {
-        _lblDb.Text = $"Veritabanı: {Path.GetFileName(_db.Path)}   |   Yedekleme: Otomatik (Yedekler/)";
+        _lblDb.Text = "Yedekleme: otomatik";
         var s = _db.GetSettings();
         string tok = s.S("telegram_bot_token"), kisisel = s.S("telegram_kisisel_chat_id");
         Pill p = tok.Length > 0 && kisisel.Length > 0 ? new Pill("🌐  Telegram Aktif", "ok") : new Pill("Telegram Pasif", "muted");
@@ -394,6 +474,9 @@ public class MainWindow : Window
         _tChrome.Start();
     }
 
-    void Hatirlat() =>
+    void Hatirlat()
+    {
         Ui.RunAsync(() => Workflows.HatirlatmalariGonder(_db, _cfg), n => { if (n > 0) Status($"{n} hatırlatma gönderildi"); });
+        Ui.RunAsync(() => Workflows.SabahOzeti(_db, _cfg), gonderildi => { if (gonderildi) _cfg.Set("sabah_ozeti_gun", Utils.TodayIso()); });
+    }
 }
