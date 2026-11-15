@@ -40,7 +40,7 @@ public class MuvekkilFinansPage : BasePage
 
     public MuvekkilFinansPage(AppCtx ctx) : base(ctx)
     {
-        Top(Ui.PageHeader("Müvekkil", "Listeden müvekkile tıklayın: cari hesap, vekaletnameler ve dava dosyaları açılır"));
+        Top(Ui.PageHeader("Müvekkil", "Listede müvekkile çift tıklayın: cari hesap, vekaletnameler ve dava dosyaları açılır"));
         _liste = BuildListe();
         _detay = BuildDetay();
         _host.Content = _liste;
@@ -51,7 +51,7 @@ public class MuvekkilFinansPage : BasePage
         _sira.SelectionChanged += (_, _) => { if (!_busy) ListeYukle(); };
         _ara.TextChanged += (_, _) => { if (!_busy) ListeYukle(); };
 
-        _tM.PreviewMouseLeftButtonUp += (_, e) => { if (SatirdaMi(e.OriginalSource as DependencyObject)) Ac(_tM.Current); };
+        _tM.MouseDoubleClick += (_, e) => { if (SatirdaMi(e.OriginalSource as DependencyObject)) Ac(_tM.Current); };
         _tM.PreviewKeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Enter) { Ac(_tM.Current); e.Handled = true; } };
         _tF.SelectionChanged += (_, _) => { if (!_busy) LoadHareket(); };
         _tV.MouseDoubleClick += (_, _) => VekAc();
@@ -344,7 +344,8 @@ public class MuvekkilFinansPage : BasePage
     UIElement BuildFinans()
     {
         var top = new DockPanel();
-        var tb = Ui.HRow(Ui.Btn("＋ Cari Kayıt", "Primary", AddF), Ui.Btn("Düzenle", "", EditF), Ui.Btn("Sil", "Danger", DelF));
+        var tb = Ui.HRow(Ui.Btn("＋ Cari Kayıt", "Primary", AddF), Ui.Btn("Düzenle", "", EditF), Ui.Btn("Sil", "Danger", DelF),
+                         Ui.Btn("📄 Cari Ekstre (Word)", "", EkstreYaz), Ui.Btn("✉ Hatırlatma Metni", "", HatirlatmaMetni));
         tb.Margin = new Thickness(0, 6, 0, 0);
         DockPanel.SetDock(tb, Dock.Bottom);
         DockPanel.SetDock(_fSum, Dock.Bottom); _fSum.Margin = new Thickness(0, 6, 0, 0);
@@ -440,6 +441,26 @@ public class MuvekkilFinansPage : BasePage
         Db.Update("finans_tahsilat", r.L("id"), v);
         Workflows.TahsilatYenidenHesapla(Db, r.L("id"));
         Refresh();
+    }
+
+    void EkstreYaz()
+    {
+        if (_mSel == null) return;
+        var dlg = new Microsoft.Win32.SaveFileDialog { Title = "Cari ekstreyi kaydet", Filter = "Word (*.docx)|*.docx", FileName = $"Cari_Ekstre_{_mSel.S("ad_soyad").Replace(' ', '_')}_{DateTime.Today:yyyyMMdd}.docx" };
+        if (dlg.ShowDialog() != true) return;
+        Documents.MakeDocx(Ekstre.Metin(Db, _mSel, Cfg.GetString("buro_adi")), dlg.FileName);
+        if (Ui.Confirm(this, "Ekstre kaydedildi. Şimdi açılsın mı? (PDF için Word'de Farklı Kaydet → PDF)")) Ui.OpenExternal(dlg.FileName);
+    }
+
+    void HatirlatmaMetni()
+    {
+        if (_mSel == null) return;
+        var r = _tF.Current;
+        double kalan = r != null ? r.D("kalan_bakiye") : _tF.Rows.Sum(x => x.D("kalan_bakiye"));
+        if (kalan <= 0) { Ui.Info(this, "Bu müvekkilin kalan bakiyesi yok."); return; }
+        var metin = Ekstre.Hatirlatma(_mSel, kalan, r?.S("sonraki_tahsilat_tarihi") ?? "", r?.S("dosya_konusu") ?? "", Cfg.GetString("buro_adi"));
+        try { Clipboard.SetText(metin); } catch (Exception) { }
+        Ui.Info(this, "Metin panoya kopyalandı (WhatsApp, SMS ya da e-postaya yapıştırın):\n\n" + metin, "Tahsilat hatırlatma");
     }
 
     void DelF()
