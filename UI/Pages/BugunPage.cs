@@ -20,6 +20,14 @@ public class BugunPage : BasePage
     public BugunPage(AppCtx ctx, bool gomulu = false) : base(ctx, !gomulu)
     {
         if (!gomulu) Top(Ui.PageHeader("Bugün", "Bugün ve bu hafta yapılması gerekenler • kritik olanlar üstte"));
+        if (gomulu)
+        {
+            // Dashboard'da süre, görev ve ajanda zaten ayrı kartlarda; burada yalnızca tebligat ve tahsilat gösterilir.
+            var st = new StackPanel();
+            st.Children.Add(_cTeb); st.Children.Add(Gap(_cTahsilat));
+            Fill(st);
+            return;
+        }
         Top(_baslik);
         var sol = new StackPanel(); var sag = new StackPanel();
         sol.Children.Add(_cSure); sol.Children.Add(Gap(_cDurusma)); sol.Children.Add(Gap(_cAjanda));
@@ -31,8 +39,7 @@ public class BugunPage : BasePage
         sol.VerticalAlignment = VerticalAlignment.Top; sag.VerticalAlignment = VerticalAlignment.Top;
         Grid.SetColumn(sag, 2);
         cols.Children.Add(sol); cols.Children.Add(sag);
-        if (gomulu) Fill(cols);
-        else Fill(new ScrollViewer { Content = cols, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        Fill(new ScrollViewer { Content = cols, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
     }
 
     static FrameworkElement Gap(FrameworkElement e) { e.Margin = new Thickness(0, 12, 0, 0); return e; }
