@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using HukukErp.Core;
 using HukukErp.Services;
 
@@ -8,13 +10,15 @@ namespace HukukErp.UI.Pages;
 public class DashboardPage : BasePage
 {
     readonly string _mode;
-    readonly BugunPage _bugun;
+    BugunPage _bugun = null!;
     readonly Inner _cUets = new("📦  Gelen Tebligatlar");
     readonly Inner _cDurusma = new("📅  Yaklaşan Duruşmalar");
     readonly Inner _cAjanda = new("🗓  Bugünün Ajandası");
     readonly Inner _cFinans = new("💰  Finans & Cari (Vekalet Ücreti)");
     readonly Inner _cIs = new("⏱  Süreli İşler (İş Listesi)");
     readonly Inner _cGorev = new("🚨  Kişisel Görevler (Sona Eren)");
+    readonly TextBlock _ozet = Ui.Muted("", false);
+    readonly TextBlock _kSure = Ui.Text("0", 26, true), _kDurusma = Ui.Text("0", 26, true), _kTeb = Ui.Text("0", 26, true), _kTahsilat = Ui.Text("0", 26, true);
     readonly TextBlock _lAlacak = Ui.Text("", 13, false, "text", true);
     readonly TextBlock _lSmm = Ui.Muted("");
     readonly ProgressBar _bar = new() { Minimum = 0, Maximum = 1000, Margin = new Thickness(0, 6, 0, 6) };
@@ -22,17 +26,15 @@ public class DashboardPage : BasePage
     public DashboardPage(AppCtx ctx, string mode) : base(ctx)
     {
         _mode = mode;
-        // başlık + mod düğmeleri
-        var title = new TextBlock { FontSize = 22 };
-        title.SetResourceReference(TextBlock.ForegroundProperty, "text");
-        title.Inlines.Add(new System.Windows.Documents.Run("Dashboard") { FontWeight = FontWeights.Bold });
-        title.Inlines.Add(new System.Windows.Documents.Run(" (Gösterge Paneli)"));
-        Top(Ui.Bar(title, new StackPanel()), 14);
+        Top(Ui.Text("Ofis Dashboard", 22, true), 2);
+        Top(_ozet, 12);
 
-        var left = Panel("📬  BİREYSEL UETS", false);
-        var rightCard = Panel("⚖  HUKUK OFİSİ & DAVA ÖZETİ", false);
-        var leftStack = new StackPanel(); var rightStack = new StackPanel();
-        left.Fill(leftStack); rightCard.Fill(rightStack);
+        // özet kutuları (tıklanınca ilgili sayfa açılır)
+        var kpi = new UniformGrid { Columns = 4, Margin = new Thickness(0, 0, 6, 0) };
+        kpi.Children.Add(Kpi("Bugün biten / geciken süre", _kSure, () => ctx.Navigate("is_listesi", null)));
+        kpi.Children.Add(Kpi("Bu hafta duruşma", _kDurusma, () => ctx.Navigate("ajanda", null)));
+        kpi.Children.Add(Kpi("Bekleyen tebligat", _kTeb, () => ctx.Navigate("avukat_uets", null)));
+        kpi.Children.Add(Kpi("Geciken tahsilat", _kTahsilat, () => ctx.Navigate("muvekkil", null)));
 
         var bCek = Ui.Btn("🌐  UETS'i Aç", "Primary", () => ctx.Navigate("avukat_uets", "ShowBrowser"));
         bCek.Height = 38;
@@ -41,34 +43,51 @@ public class DashboardPage : BasePage
         sub.Margin = new Thickness(0, 0, 0, 4);
         _cUets.Outer.Children.Insert(1, bCek);
         _cUets.Outer.Children.Insert(2, sub);
-        leftStack.Children.Add(Gap(_cUets));
 
-        rightStack.Children.Add(_cAjanda);
-        rightStack.Children.Add(Gap(_cDurusma));
         var bTah = Ui.Btn("💰  Tahsilat Girişi Ekle", "", () => ctx.Navigate("muvekkil", "TahsilatEkle"));
         bTah.HorizontalAlignment = HorizontalAlignment.Left;
         foreach (UIElement w in new UIElement[] { _lAlacak, _lSmm, _bar, bTah }) _cFinans.Outer.Children.Add(w);
-        rightStack.Children.Add(Gap(_cFinans));
 
-        var cols = new Grid { Margin = new Thickness(0, 0, 6, 0) };
-        cols.ColumnDefinitions.Add(new ColumnDefinition());
-        cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
-        cols.ColumnDefinitions.Add(new ColumnDefinition());
-        left.VerticalAlignment = VerticalAlignment.Top; rightCard.VerticalAlignment = VerticalAlignment.Top;
-        Grid.SetColumn(rightCard, 2);
-        cols.Children.Add(left); cols.Children.Add(rightCard);
-        // Üstte "Bugün" bölümü, altında genel özet
+        // sol: süreler (en üstte), görevler (2.), UETS • sağ: ajanda, duruşmalar, tebligat/tahsilat, finans
         _bugun = new BugunPage(ctx, true);
-        cols.Margin = new Thickness(0, 14, 6, 0);
-        // Sıra: 1) Süreli işler  2) Kişisel görevler  3) Bugün  4) UETS + ofis özeti
+        var left = new StackPanel(); var right = new StackPanel();
+        left.Children.Add(_cIs);
+        left.Children.Add(Gap(_cGorev));
+        left.Children.Add(Gap(_cUets));
+        right.Children.Add(_cAjanda);
+        right.Children.Add(Gap(_cDurusma));
+        right.Children.Add(Gap(_bugun));
+        right.Children.Add(Gap(_cFinans));
+
+        var cols = new Grid { Margin = new Thickness(0, 14, 6, 0) };
+        cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
+        cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+        cols.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+        left.VerticalAlignment = VerticalAlignment.Top; right.VerticalAlignment = VerticalAlignment.Top;
+        Grid.SetColumn(right, 2);
+        cols.Children.Add(left); cols.Children.Add(right);
+
         var tum = new StackPanel();
-        tum.Children.Add(new Border { Margin = new Thickness(0, 0, 6, 0), Child = _cIs });
-        tum.Children.Add(new Border { Margin = new Thickness(0, 12, 6, 0), Child = _cGorev });
-        _bugun.Margin = new Thickness(0, 14, 0, 0);
-        tum.Children.Add(_bugun);
+        tum.Children.Add(kpi);
         tum.Children.Add(cols);
         Fill(new ScrollViewer { Content = tum, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
     }
+
+    static Border Kpi(string etiket, TextBlock deger, Action git)
+    {
+        var b = new Border { CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 12, 16, 12), Margin = new Thickness(0, 0, 10, 0),
+                             BorderThickness = new Thickness(1), Cursor = Cursors.Hand };
+        b.SetResourceReference(Border.BackgroundProperty, "surface2");
+        b.SetResourceReference(Border.BorderBrushProperty, "border");
+        var sp = new StackPanel();
+        sp.Children.Add(Ui.Muted(etiket, false));
+        sp.Children.Add(deger);
+        b.Child = sp;
+        b.MouseLeftButtonUp += (_, _) => git();
+        return b;
+    }
+
+    static void Boya(TextBlock t, string brush) => t.SetResourceReference(TextBlock.ForegroundProperty, brush);
 
     static FrameworkElement Gap(FrameworkElement e) { e.Margin = new Thickness(0, 12, 0, 0); return e; }
 
@@ -103,6 +122,21 @@ public class DashboardPage : BasePage
     {
         var d = Db;
         _bugun.Refresh();
+
+        // özet kutuları
+        var bugunIso = Utils.TodayIso();
+        long nSure = d.ScalarL("SELECT COUNT(*) FROM sureler WHERE durum='Açık' AND son_tarih!='' AND son_tarih<=?", bugunIso);
+        long nDur = d.ScalarL("SELECT COUNT(*) FROM davalar WHERE durusma_tarihi!='' AND durusma_tarihi>=? AND durusma_tarihi<=date('now','+7 day') AND asama_durum!='Karara Çıktı'", bugunIso);
+        long nTeb = d.ScalarL("SELECT COUNT(*) FROM genel_tebligatlar WHERE durum=?", Workflows.QAvukat);
+        double gec = d.ScalarD("SELECT COALESCE(SUM(kalan_bakiye),0) FROM finans_tahsilat WHERE kalan_bakiye>0 AND sonraki_tahsilat_tarihi!='' AND sonraki_tahsilat_tarihi<=?", bugunIso);
+        _kSure.Text = nSure.ToString(); Boya(_kSure, nSure > 0 ? "danger" : "text");
+        _kDurusma.Text = nDur.ToString(); Boya(_kDurusma, "text");
+        _kTeb.Text = nTeb.ToString(); Boya(_kTeb, nTeb > 0 ? "warn" : "text");
+        _kTahsilat.Text = Utils.FmtMoney(gec); Boya(_kTahsilat, gec > 0 ? "warn" : "text");
+        var parcalar = new List<string>();
+        if (nSure > 0) parcalar.Add($"{nSure} süre bugün bitiyor ya da gecikti");
+        if (nTeb > 0) parcalar.Add($"{nTeb} bekleyen tebligat");
+        _ozet.Text = DateTime.Today.ToString("dd MMMM yyyy, dddd", Utils.Tr) + (parcalar.Count > 0 ? "  •  " + string.Join(", ", parcalar) : "  •  acil bir iş görünmüyor");
         // Şirket UETS bildirimleri
         _cUets.Clear();
         var ts = d.Query("SELECT * FROM genel_tebligatlar WHERE hesap_tipi='Sahsi' ORDER BY id DESC LIMIT 5");
