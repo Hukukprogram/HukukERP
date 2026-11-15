@@ -13,17 +13,44 @@ public class RaporPage : BasePage
 
     readonly List<Sekme> _sekmeler = new();
     readonly TabControl _tabs = new();
+    readonly ComboBox _ay = new() { MinWidth = 140, Margin = new Thickness(8, 0, 0, 0) };
+    bool _busy;
 
     public RaporPage(AppCtx ctx) : base(ctx)
     {
         Top(Ui.PageHeader("Raporlar", "Büronun mali ve dava durumu • her tablo CSV olarak kaydedilebilir"));
-        Top(Ui.HRow(Ui.Btn("📄 Seçili Raporu CSV Kaydet…", "Primary", CsvKaydet), Ui.Btn("⟳ Yenile", "", Refresh)));
+        Top(Ui.HRow(Ui.Btn("📄 Seçili Raporu CSV Kaydet…", "Primary", CsvKaydet), Ui.Btn("⟳ Yenile", "", Refresh), Ui.Muted("Aylık özet ayı:", false), _ay));
+        for (int i = 0; i < 18; i++) _ay.Items.Add(DateTime.Today.AddMonths(-i).ToString("yyyy-MM"));
+        _ay.SelectedIndex = 0;
+        _ay.SelectionChanged += (_, _) => { if (!_busy) AyOzeti(); };
 
         Ekle("Aylık Tahsilat / Masraf", new[] { ("Ay", "ay", (Func<object?, string>?)null), ("Tahsilat", "tahsilat", Fmt.Money), ("Dosya Masrafı", "masraf", Fmt.Money), ("Net", "net", Fmt.Money) });
         Ekle("Müvekkil Bakiyeleri", new[] { ("Müvekkil", "ad_soyad", (Func<object?, string>?)null), ("Toplam Ücret", "toplam", Fmt.Money), ("Alınan", "alinan", Fmt.Money), ("Kalan", "kalan", Fmt.Money) });
         Ekle("Açık Davalar", new[] { ("Müvekkil", "ad_soyad", (Func<object?, string>?)null), ("Mahkeme", "mahkeme_adi", null), ("Esas", "esas_no", null), ("Aşama", "asama_durum", null), ("Duruşma", "durusma_tarihi", Fmt.Date), ("Açık Süre", "acik_sure", null) });
         Ekle("Değişiklik Günlüğü", new[] { ("Zaman", "zaman", (Func<object?, string>?)null), ("Kayıt Türü", "tablo", null), ("İşlem", "islem", null), ("Kayıt No", "kayit_id", null), ("Alanlar", "ozet", null) });
+        Ekle("Aylık Özet", new[] { ("Kalem", "kalem", (Func<object?, string>?)null), ("Değer", "deger", null) });
         Fill(_tabs);
+    }
+
+    void AyOzeti()
+    {
+        var ay = _ay.SelectedItem as string ?? DateTime.Today.ToString("yyyy-MM");
+        double tahsilat = Db.ScalarD("SELECT COALESCE(SUM(tutar),0) FROM tahsilat_hareketleri WHERE substr(tarih,1,7)=?", ay);
+        double masraf = Db.ScalarD("SELECT COALESCE(SUM(tutar),0) FROM dava_masraflari WHERE substr(tarih,1,7)=?", ay);
+        Row S(string k, string v) => new() { ["kalem"] = k, ["deger"] = v };
+        T(4).Load(new List<Row>
+        {
+            S("Ay", ay),
+            S("Tahsil edilen vekalet ücreti", Utils.FmtMoney(tahsilat)),
+            S("Dosya masrafı", Utils.FmtMoney(masraf)),
+            S("Net (tahsilat - masraf)", Utils.FmtMoney(tahsilat - masraf)),
+            S("Yeni müvekkil", Db.ScalarL("SELECT COUNT(*) FROM muvekkiller WHERE substr(kayit_tarihi,1,7)=?", ay).ToString()),
+            S("Kapanan dosya", Db.ScalarL("SELECT COUNT(*) FROM davalar WHERE substr(kapanis_tarihi,1,7)=?", ay).ToString()),
+            S("Gelen tebligat", Db.ScalarL("SELECT COUNT(*) FROM genel_tebligatlar WHERE substr(teblig_tarihi,1,7)=?", ay).ToString()),
+            S("Girilen duruşma notu", Db.ScalarL("SELECT COUNT(*) FROM durusma_notlari WHERE substr(tarih,1,7)=?", ay).ToString()),
+            S("Şu an açık süre", Db.ScalarL("SELECT COUNT(*) FROM sureler WHERE durum='Açık'").ToString()),
+            S("Toplam kalan alacak", Utils.FmtMoney(Db.ScalarD("SELECT COALESCE(SUM(kalan_bakiye),0) FROM finans_tahsilat"))),
+        });
     }
 
     void Ekle(string ad, (string Baslik, string Anahtar, Func<object?, string>? Fmt)[] kolonlar)
@@ -50,6 +77,7 @@ public class RaporPage : BasePage
             "(SELECT COUNT(*) FROM sureler s WHERE s.dava_id=d.id AND s.durum='Açık') AS acik_sure " +
             "FROM davalar d LEFT JOIN muvekkiller m ON m.id=d.muvekkil_id WHERE d.asama_durum!='Karara Çıktı' ORDER BY d.durusma_tarihi=''," + " d.durusma_tarihi"));
         T(3).Load(Db.Query("SELECT * FROM audit_log ORDER BY id DESC LIMIT 1000"));
+        AyOzeti();
     }
 
     void CsvKaydet()
