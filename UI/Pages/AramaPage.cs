@@ -8,6 +8,9 @@ namespace HukukErp.UI.Pages;
 /// <summary>Genel arama: müvekkil, dava, tebligat, süre, görev ve ajanda kayıtlarında tek kutudan arar. Çift tıklayınca ilgili sayfa açılır.</summary>
 public class AramaPage : BasePage
 {
+    /// <summary>Üst arama çubuğundan gelen sorgu; sayfa açılınca otomatik aranır.</summary>
+    public static string? Sorgu;
+
     readonly TextBox _kutu = new() { MinWidth = 420, Margin = new Thickness(0, 0, 8, 0) };
     readonly TextBlock _sayi = Ui.Muted("");
     readonly DataTable _t = new(("Tür", "tur", null), ("Kayıt", "baslik", null), ("Ayrıntı", "detay", null));
@@ -21,7 +24,11 @@ public class AramaPage : BasePage
         Fill(_t);
     }
 
-    public override void Refresh() => _kutu.Focus();
+    public override void Refresh()
+    {
+        if (!string.IsNullOrWhiteSpace(Sorgu)) { _kutu.Text = Sorgu; Sorgu = null; Ara(); }
+        _kutu.Focus();
+    }
 
     static Row R(string tur, string baslik, string detay, string sayfa, long id) =>
         new() { ["tur"] = tur, ["baslik"] = baslik, ["detay"] = detay, ["sayfa"] = sayfa, ["kid"] = id };
