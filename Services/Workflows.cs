@@ -104,6 +104,49 @@ public static class Workflows
             });
     }
 
+    /// <summary>Her sabah (varsayılan 08:00'den sonra, günde bir kez) Telegram'a günün özetini gönderir. Gönderildiyse true.</summary>
+    public static bool SabahOzeti(Db db, Config cfg)
+    {
+        var s = db.GetSettings();
+        if (s.S("telegram_bot_token").Length == 0 || s.S("telegram_kisisel_chat_id").Length == 0) return false;
+        if (cfg.GetInt("sabah_ozeti_acik", 1) == 0) return false;
+        var bugun = Utils.TodayIso();
+        if (cfg.GetString("sabah_ozeti_gun") == bugun) return false;
+        if (DateTime.Now.Hour < cfg.GetInt("sabah_ozeti_saat", 8)) return false;
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"☀ Günaydın • {DateTime.Today.ToString("dd MMMM dddd", Utils.Tr)}");
+        bool bos = true;
+        var sureler = db.Query("SELECT sr.*, TRIM(COALESCE(d.mahkeme_adi,'') || ' ' || COALESCE(d.esas_no,'')) AS dava FROM sureler sr LEFT JOIN davalar d ON d.id=sr.dava_id " +
+                               "WHERE sr.durum='Açık' AND sr.son_tarih!='' AND sr.son_tarih<=date('now','+3 day') ORDER BY sr.son_tarih LIMIT 8");
+        if (sureler.Count > 0)
+        {
+            bos = false; sb.AppendLine("\n⏱ Süreler");
+            foreach (var r in sureler)
+            {
+                var k = Utils.DaysLeft(r.S("son_tarih"));
+                var d = k == null ? "" : k < 0 ? $"{-k} gün geçti" : k == 0 ? "BUGÜN" : $"{k} gün";
+                sb.AppendLine($"• {r.S("baslik")} ({d}){(r.S("dava").Length > 0 ? " – " + r.S("dava") : "")}");
+            }
+        }
+        var aj = db.Query("SELECT * FROM ajanda WHERE tarih=? ORDER BY saat", bugun);
+        var du = db.Query("SELECT * FROM davalar WHERE durusma_tarihi=? AND NOT EXISTS (SELECT 1 FROM ajanda x WHERE x.dava_id=davalar.id AND x.tarih=davalar.durusma_tarihi)", bugun);
+        if (aj.Count + du.Count > 0)
+        {
+            bos = false; sb.AppendLine("\n⚖ Bugün");
+            foreach (var r in aj) sb.AppendLine($"• {r.S("saat")} {(r.S("baslik").Length > 0 ? r.S("baslik") : r.S("tur"))} {r.S("mahkeme")} {r.S("esas_no")}".Trim());
+            foreach (var r in du) sb.AppendLine($"• Duruşma – {r.S("mahkeme_adi")} {r.S("esas_no")}");
+        }
+        var teb = db.ScalarL("SELECT COUNT(*) FROM genel_tebligatlar WHERE durum=?", QAvukat);
+        if (teb > 0) { bos = false; sb.AppendLine($"\n📬 Bekleyen tebligat: {teb}"); }
+        var tah = db.ScalarD("SELECT COALESCE(SUM(kalan_bakiye),0) FROM finans_tahsilat WHERE kalan_bakiye>0 AND sonraki_tahsilat_tarihi!='' AND sonraki_tahsilat_tarihi<=date('now','+3 day')");
+        if (tah > 0) { bos = false; sb.AppendLine($"💰 Vadesi gelen tahsilat: {Utils.FmtMoney(tah)}"); }
+        if (bos) sb.AppendLine("\nBugün acil bir iş görünmüyor.");
+        try { Notify.SendPersonal(s, sb.ToString().TrimEnd()); }
+        catch (NotifyError) { return false; }
+        return true;
+    }
+
     public static int HatirlatmalariGonder(Db db, Config cfg)
     {
         var s = db.GetSettings();
