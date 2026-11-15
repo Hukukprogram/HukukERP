@@ -6,7 +6,7 @@ namespace HukukErp.Services;
 /// <summary>Ajanda, duruşma ve süreleri telefon/Outlook/Google takvimine aktarılabilen .ics dosyasına çevirir.</summary>
 public static class Takvim
 {
-    static string Kac(string s) => s.Replace("\\", "\\\\").Replace(";", "\;").Replace(",", "\\,").Replace("\r", "").Replace("\n", "\\n");
+    static string Kac(string s) => s.Replace("\\", "\\\\").Replace(";", "\\;").Replace(",", "\\,").Replace("\r", "").Replace("\n", "\\n");
 
     public static string Ics(Db db)
     {
