@@ -237,8 +237,17 @@ public class AjandaPage : BasePage
         Ekle("Bugüne git", () => { _cur = DateTime.Today; Render(); });
         Ekle("Yeni etkinlik…", () => Yeni(DateTime.Today, ""));
         Ekle("Yazdır…", Yazdir);
+        Ekle("Telefon/Outlook takvimine aktar (.ics)…", IcsAktar);
         Ekle("Dava Takibi sayfasına git", () => Ctx.Navigate("dava", null));
         m.IsOpen = true;
+    }
+
+    void IcsAktar()
+    {
+        var dlg = new Microsoft.Win32.SaveFileDialog { Title = "Takvim dosyasını kaydet", Filter = "Takvim (*.ics)|*.ics", FileName = $"HukukERP_{DateTime.Today:yyyyMMdd}.ics" };
+        if (dlg.ShowDialog() != true) return;
+        System.IO.File.WriteAllText(dlg.FileName, HukukErp.Services.Takvim.Ics(Db), new System.Text.UTF8Encoding(false));
+        Ui.Info(this, $"Kaydedildi:\n{dlg.FileName}\n\nBu dosyayı telefonunuza gönderip açın ya da Google Takvim / Outlook'ta içe aktarın (açık süreler, ajanda ve duruşmalar dahil).");
     }
 
     void Yazdir()
