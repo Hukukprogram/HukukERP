@@ -1,0 +1,23 @@
+name: Ekran goruntuleri
+on:
+  workflow_dispatch:      # Actions sekmesinden elle "Run workflow" ile çalışır
+jobs:
+  ekran:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Derle
+        run: dotnet publish HukukErp.csproj -c Release -r win-x64 --self-contained true -o publish
+      - name: Ekran goruntuleri al (gecici bos veri, gercek veriye dokunmaz)
+        run: |
+          $p = Start-Process -FilePath ".\publish\HukukERP.exe" -ArgumentList "--ekran-goruntusu","ekran" -PassThru
+          $p.WaitForExit(120000) | Out-Null
+          if (-not $p.HasExited) { $p.Kill() }
+          Get-ChildItem ekran -ErrorAction SilentlyContinue | Select-Object Name, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ekran-goruntuleri
+          path: ekran/
