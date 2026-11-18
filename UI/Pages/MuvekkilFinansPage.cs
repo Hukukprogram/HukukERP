@@ -56,6 +56,11 @@ public class MuvekkilFinansPage : BasePage
     Row? _mSel;
     long _sid;
     bool _busy;
+    const int KartSayfa = 60;                 // binlerce müvekkilde arayüzü yavaşlatmamak için kartlar parça parça çizilir
+    int _kLimit = KartSayfa;
+    List<Row> _kRows = new(); int _kToplam;
+    List<Row> _gorunen = new();
+    readonly System.Windows.Threading.DispatcherTimer _aramaT = new() { Interval = TimeSpan.FromMilliseconds(220) };
 
     public MuvekkilFinansPage(AppCtx ctx) : base(ctx)
     {
@@ -71,8 +76,19 @@ public class MuvekkilFinansPage : BasePage
         foreach (var s in Siralar) _sira.Items.Add(s);
         _sira.SelectedIndex = 0;
         _sira.SelectionChanged += (_, _) => { if (!_busy) ListeYukle(); };
-        _ara.TextChanged += (_, _) => { if (!_busy) ListeYukle(); };
-        _ara.KeyDown += (_, e) => { if (e.Key == Key.Escape) { _ara.Text = ""; e.Handled = true; } };
+        _aramaT.Tick += (_, _) => { _aramaT.Stop(); ListeYukle(); };
+        _ara.TextChanged += (_, _) => { if (_busy) return; _aramaT.Stop(); _aramaT.Start(); };
+        _ara.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape) { _ara.Text = ""; e.Handled = true; }
+            else if (e.Key == Key.Enter)
+            {
+                // Enter: yazılanı hemen uygula; tek sonuç varsa doğrudan aç (T.C. no / telefon ile hızlı erişim)
+                _aramaT.Stop(); ListeYukle();
+                if (_gorunen.Count == 1) Ac(_gorunen[0]);
+                e.Handled = true;
+            }
+        };
         _tS.MouseDoubleClick += (_, _) => Ctx.Navigate("is_listesi", null);
         // Esc: müvekkil detayından listeye dön (yazı yazarken değil)
         PreviewKeyDown += (_, e) =>
@@ -303,7 +319,16 @@ public class MuvekkilFinansPage : BasePage
             _kWrap.Children.Add(sp);
             return;
         }
-        foreach (var m in rows) _kWrap.Children.Add(KartYap(m));
+        _kRows = rows; _kToplam = toplam;
+        foreach (var m in rows.Take(_kLimit)) _kWrap.Children.Add(KartYap(m));
+        if (rows.Count > _kLimit)
+        {
+            var kalan = rows.Count - _kLimit;
+            var daha = Ui.Btn($"＋ Daha fazla göster ({kalan} müvekkil daha)", "", () => { _kLimit += KartSayfa * 2; KartlariYaz(_kRows, _kToplam); });
+            daha.Margin = new Thickness(8, 8, 8, 16); daha.Padding = new Thickness(18, 10, 18, 10);
+            daha.ToolTip = "Aramayı daraltmak daha hızlıdır: ad, T.C. no veya telefon yazın";
+            _kWrap.Children.Add(daha);
+        }
     }
 
     /// <summary>Listedeki satır için, detay açmadan, müvekkil seçili gibi işlem yapar.</summary>
@@ -382,10 +407,13 @@ public class MuvekkilFinansPage : BasePage
             _ => rows.OrderBy(x => x.S("ad_soyad"), cmp).ToList(),
         };
         foreach (var kv in _gor) kv.Value.Aktif(kv.Key == _kart);
+        _gorunen = rows;
+        _kLimit = KartSayfa;
         KartlariYaz(rows, toplam);
         _govde.Content = _kart ? _kScroll : _tM;
         _tM.Load(rows, new() { ["kalan"] = r => r.D("kalan") > 0 ? "warn" : "muted", ["durusma"] = r => Ui.DeadlineKind(r.S("durusma")) });
-        _sayi.Text = (q.Length > 0 || _fl != Fl.Tumu) ? $"{rows.Count} / {toplam} müvekkil gösteriliyor" : $"{toplam} müvekkil";
+        _sayi.Text = (q.Length > 0 || _fl != Fl.Tumu) ? $"{rows.Count} / {toplam} müvekkil bulundu" : $"{toplam} müvekkil";
+        if (_kart && rows.Count > KartSayfa) _sayi.Text += $"  •  kartlarda ilk {Math.Min(_kLimit, rows.Count)} gösteriliyor (tablo görünümü hepsini listeler)";
     }
 
     // ------------------------------------------------------------ detay (müvekkile tıklayınca)

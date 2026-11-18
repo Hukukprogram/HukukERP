@@ -643,6 +643,16 @@ public class FormDialog : Window
                 };
             case "combo":
                 {
+                    if (f.Options.Count > 25)
+                    {
+                        // binlerce kayıt (ör. müvekkil): arama kutulu seçici
+                        var sp = new SearchPick { MinWidth = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
+                        foreach (var (val, lab) in f.Options) sp.Items.Add(new ComboItem { Value = val, Label = lab });
+                        int ix = -1;
+                        for (int i = 0; i < sp.Items.Count; i++) if (K(sp.Items[i].Value) == K(v)) { ix = i; break; }
+                        sp.SelectedIndex = ix >= 0 ? ix : 0;
+                        return sp;
+                    }
                     var cb = new ComboBox { DisplayMemberPath = "Label" };
                     foreach (var (val, lab) in f.Options) cb.Items.Add(new ComboItem { Value = val, Label = lab });
                     int idx = -1;
@@ -689,7 +699,7 @@ public class FormDialog : Window
         return f.Kind switch
         {
             "multiline" => ((TextBox)w).Text.Trim(),
-            "combo" => ((w as ComboBox)?.SelectedItem as ComboItem)?.Value,
+            "combo" => w is SearchPick spk ? spk.SelectedItem?.Value : ((w as ComboBox)?.SelectedItem as ComboItem)?.Value,
             "date" => ((DateBox)w).Iso() ?? "",
             "money" => Math.Round(Utils.ParseMoney(((TextBox)w).Text), 2),
             "int" => int.TryParse(((TextBox)w).Text, out var n) ? n : 0,

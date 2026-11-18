@@ -129,6 +129,10 @@ CREATE TABLE IF NOT EXISTS vekaletnameler (
     dosya_yolu TEXT DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS ix_vekalet_muv ON vekaletnameler(muvekkil_id);
+CREATE INDEX IF NOT EXISTS ix_dava_muv ON davalar(muvekkil_id);
+CREATE INDEX IF NOT EXISTS ix_finans_muv ON finans_tahsilat(muvekkil_id);
+CREATE INDEX IF NOT EXISTS ix_muv_ad ON muvekkiller(ad_soyad);
+CREATE INDEX IF NOT EXISTS ix_muv_tc ON muvekkiller(tc_no);
 CREATE TABLE IF NOT EXISTS sablonlar (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sablon_adi TEXT NOT NULL,

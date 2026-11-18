@@ -72,9 +72,9 @@ public class UetsCenterPage : BasePage
 
         _tN = new DataTable(("Tarih", "tarih", Fmt.Date), ("Kurum", "kurum", null), ("Esas", "esas_no", null), ("Konu", "konu", null),
                             ("Durum", "durum", null), ("İlk görülme", "ilk_gorulme", null));
-        var nb = Ui.FRow(Ui.Btn("✔ Görüldü", "Seçili satırı görüldü say", "Ok", () => YeniGordu(false)),
-                         Ui.Btn("✔✔ Tümünü görüldü say", "Listedeki tüm yeni satırları görüldü say", "", () => YeniGordu(true)),
-                         Ui.Btn("🌐 UETS'i Aç", "UETS sekmesine geç; tebligatı kendiniz açın", "", ShowBrowser));
+        var nb = Ui.FRow(B("✔ Görüldü", "Seçili satırı görüldü say", "Ok", () => YeniGordu(false)),
+                         B("✔✔ Tümünü görüldü say", "Listedeki tüm yeni satırları görüldü say", "", () => YeniGordu(true)),
+                         B("🌐 UETS'i Aç", "UETS sekmesine geç; tebligatı kendiniz açın", "", ShowBrowser));
         DockPanel.SetDock(nb, Dock.Bottom); nb.Margin = new Thickness(0, 8, 0, 0);
         _yeniBilgi.Margin = new Thickness(0, 8, 0, 0);
         DockPanel.SetDock(_yeniBilgi, Dock.Top);
@@ -357,7 +357,7 @@ public class UetsBrowser : Grid
         lbl.VerticalAlignment = VerticalAlignment.Center;
         var bar = new DockPanel { Margin = new Thickness(0, 8, 0, 6) };
         var nav = Ui.HRow(Ui.Btn("◀", "", () => { if (_ready && _view.CanGoBack) _view.GoBack(); }),
-                          Ui.Btn("⟳", "", () => { if (_ready) _view.Reload(); }), Ui.Btn("Tebligatlarım", "", GoList), Ui.Btn("🔄 Şimdi eşitle", "Listeyi yalnızca okur; yeni görünenleri kaydeder, hiçbir tebligata tıklamaz", () => Esitle(true)));
+                          Ui.Btn("⟳", "", () => { if (_ready) _view.Reload(); }), Ui.Btn("Tebligatlarım", "", GoList), EsitleBtn());
         DockPanel.SetDock(nav, Dock.Left);
         var sag = Ui.HRow(lbl, _combo, Ui.Btn("Sayfa Yapısını Kaydet (Tanı)", "", DumpStructure));
         DockPanel.SetDock(sag, Dock.Right);
@@ -381,6 +381,13 @@ public class UetsBrowser : Grid
         _status.Margin = new Thickness(0, 0, 0, 6);
         SetRow(_status, 2); Children.Add(_status);
         SetRow(_view, 3); Children.Add(_view);
+    }
+
+    Button EsitleBtn()
+    {
+        var b = Ui.Btn("🔄 Şimdi eşitle", "", () => { _ = Esitle(true); });
+        b.ToolTip = "Listeyi yalnızca okur; yeni görünenleri kaydeder, hiçbir tebligata tıklamaz";
+        return b;
     }
 
     int Dk => int.TryParse(_spin.Text.Trim(), out var n) ? Math.Clamp(n, 0, 1440) : 0;

@@ -29,7 +29,7 @@ public class DosyaKartiPage : BasePage
     };
 
     readonly ComboBox _combo = new() { MinWidth = 380, Margin = new Thickness(0, 0, 8, 0) };
-    readonly ComboBox _mcombo = new() { MinWidth = 260, Margin = new Thickness(0, 0, 14, 0) };
+    readonly SearchPick _mcombo = new() { MinWidth = 260, Margin = new Thickness(0, 0, 14, 0), Placeholder = "— Tüm müvekkiller —" };
     readonly StackPanel _serit = new() { Orientation = Orientation.Horizontal };
     readonly TextBlock _seritBaslik = Ui.Muted("", false);
     static TextBlock KV() => Ui.Text("—", 18, true);

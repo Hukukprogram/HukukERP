@@ -27,7 +27,7 @@ public class DavaPage : BasePage
 
     // liste
     readonly TextBox _ara = new() { Width = 240, ToolTip = "Mahkeme, esas no, müvekkil, karşı taraf veya dava türü ile ara" };
-    readonly ComboBox _mc = new() { MinWidth = 210 };
+    readonly SearchPick _mc = new() { MinWidth = 210, Placeholder = "Tüm müvekkiller" };
     readonly ComboBox _sira = new() { MinWidth = 220 };
     readonly Dictionary<Fl, TbBtn> _chip = new();
     readonly StackPanel _kartlar = new() { Margin = new Thickness(0, 0, 6, 0) };
@@ -226,10 +226,10 @@ public class DavaPage : BasePage
         try
         {
             _mc.Items.Clear(); _mIds.Clear();
-            _mc.Items.Add("Tüm müvekkiller"); _mIds.Add(0);
+            _mc.Items.Add(new ComboItem { Value = 0L, Label = "Tüm müvekkiller" }); _mIds.Add(0);
             var cmp = StringComparer.Create(Tr, true);
             foreach (var m in Db.Query("SELECT id, ad_soyad FROM muvekkiller").OrderBy(x => x.S("ad_soyad"), cmp))
-            { _mc.Items.Add(m.S("ad_soyad")); _mIds.Add(m.L("id")); }
+            { _mc.Items.Add(new ComboItem { Value = m.L("id"), Label = m.S("ad_soyad") }); _mIds.Add(m.L("id")); }
             var ix = _mIds.IndexOf(onceki);
             _mc.SelectedIndex = ix < 0 ? 0 : ix;
         }
