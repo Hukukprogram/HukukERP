@@ -2,6 +2,8 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using HukukErp.Core;
 using HukukErp.Services;
@@ -19,18 +21,29 @@ public class DosyaKartiPage : BasePage
     static DateTime? _sayacBas;
 
     static readonly string[] Kanallar = { "Telefon", "WhatsApp", "SMS", "E-posta", "Yüz yüze", "Diğer" };
+    static readonly string[] Gruplar = { "Tümü", "Süre ve duruşma", "Tebligat", "Mali", "Evrak", "Notlar" };
+    static readonly (string Anahtar, string Ad)[] HmkAlan =
+    {
+        ("dava_dilekcesi_tarih", "Dava dilekçesi"), ("cevap_dilekcesi_tarih", "Cevap dilekçesi"),
+        ("cevaba_cevap_tarih", "Cevaba cevap"), ("ikinci_cevap_tarih", "İkinci cevap"), ("durusma_tarihi", "Duruşma"),
+    };
 
-    readonly ComboBox _combo = new() { MinWidth = 420, Margin = new Thickness(0, 0, 8, 0) };
-    readonly ComboBox _mcombo = new() { MinWidth = 280, Margin = new Thickness(0, 0, 14, 0) };
-    readonly DataTable _tDosya = new(("Mahkeme", "mahkeme_adi", null), ("Esas No", "esas_no", null), ("Tür", "dava_turu", null),
-        ("Karşı Taraf", "karsi_taraf", null), ("Duruşma", "durusma_tarihi", Fmt.Date), ("Aşama", "asama_durum", null)) { Height = 130 };
-    readonly TextBlock _kSure = Ui.Text("—", 20, true), _kDur = Ui.Text("—", 20, true), _kCari = Ui.Text("—", 20, true), _kZaman = Ui.Text("—", 20, true);
-    readonly TextBlock _dosyaBaslik = Ui.H2("Müvekkilin dava dosyaları");
-    readonly TextBlock _bilgi = Ui.Text("", 13, false, "text", true);
-    readonly TextBlock _ozet = Ui.Text("", 13, true, "text", true);
-    readonly DataTable _t = new(("Tarih", "tarih", Fmt.Date), ("Tür", "tur", null), ("Açıklama", "aciklama", null), ("Tutar / Süre", "tutar", null));
+    readonly ComboBox _combo = new() { MinWidth = 380, Margin = new Thickness(0, 0, 8, 0) };
+    readonly ComboBox _mcombo = new() { MinWidth = 260, Margin = new Thickness(0, 0, 14, 0) };
+    readonly StackPanel _serit = new() { Orientation = Orientation.Horizontal };
+    readonly TextBlock _seritBaslik = Ui.Muted("", false);
+    static TextBlock KV() => Ui.Text("—", 18, true);
+    readonly TextBlock _kSure = KV(), _kDur = KV(), _kTeb = KV(), _kCari = KV(), _kMas = KV(), _kZaman = KV();
+    readonly TextBlock _dTitle = Ui.Text("", 22, true, "text", true), _dSub = Ui.Muted("");
+    readonly WrapPanel _dEtiket = new() { Margin = new Thickness(0, 8, 0, 0) };
+    readonly UniformGrid _step = new() { Columns = 8, Margin = new Thickness(0, 0, 0, 12) };
+    readonly StackPanel _tl = new();
+    readonly Dictionary<string, TbBtn> _chip = new();
     readonly Button _sayacBtn;
     readonly DispatcherTimer _sayacTimer = new() { Interval = TimeSpan.FromSeconds(30) };
+    string _grup = "Tümü";
+    List<Row> _kayitlar = new();
+    Row? _sec; Border? _secB;
     bool _busy;
 
     public DosyaKartiPage(AppCtx ctx) : base(ctx)
@@ -40,48 +53,53 @@ public class DosyaKartiPage : BasePage
         {
             if (_busy) return;
             _busy = true;
-            try { DosyaSec(Secili); } finally { _busy = false; }
+            try { SeritYaz(); } finally { _busy = false; }
             Yukle();
         };
         _mcombo.SelectionChanged += (_, _) => { if (!_busy) { _busy = true; try { DavaDoldur(0); } finally { _busy = false; } Yukle(); } };
-        _tDosya.SelectionChanged += (_, _) =>
-        {
-            if (_busy || _tDosya.Current == null) return;
-            var id = _tDosya.Current.L("id");
-            _busy = true;
-            try { var it = _combo.Items.Cast<ComboItem>().FirstOrDefault(x => Convert.ToInt64(x.Value) == id); if (it != null) _combo.SelectedItem = it; }
-            finally { _busy = false; }
-            Yukle();
-        };
-        Top(Ui.HRow(Ui.Muted("Müvekkil:", false), _mcombo, Ui.Muted("Dava:", false), _combo, Ui.Btn("＋ Süreli İş", "Primary", SureEkle),
-                    Ui.Btn("İş Listesi", "", () => Ctx.Navigate("is_listesi", null)), Ui.Btn("Dava Sayfası", "", () => Ctx.Navigate("dava", null)),
-                    Ui.Btn("Emanet / Masraf", "", () => Ctx.Navigate("emanet", null))));
-        _sayacBtn = Ui.Btn("▶ Sayaç Başlat", "", SayacDegistir);
-        Top(Ui.HRow(Ui.Btn("⚖ Duruşma Notu", "Primary", DurusmaNotu), Ui.Btn("📞 Müvekkile Bildirdim", "", Bilgilendirme),
-                    _sayacBtn, Ui.Btn("＋ Zaman", "", ZamanEkle), Ui.Btn("📎 Evrak Ekle…", "", EvrakSec),
-                    Ui.Btn("🔒 Dosyayı Kapat / Aç", "", KapatAc), Ui.Btn("Seçili Kaydı Sil", "Danger", KayitSil)));
-        var info = new Card();
-        info.Top(_bilgi);
-        info.Fill(_ozet);
-        Top(info);
-        var kartlar = new UniformGrid { Columns = 4 };
-        kartlar.Children.Add(Mini("Açık süre", _kSure));
-        kartlar.Children.Add(Mini("Sonraki duruşma", _kDur));
-        kartlar.Children.Add(Mini("Cari kalan", _kCari));
-        kartlar.Children.Add(Mini("Harcanan zaman", _kZaman));
-        Top(kartlar);
-        _dosyaBaslik.Margin = new Thickness(0, 0, 0, 6);
-        DockPanel.SetDock(_dosyaBaslik, Dock.Top);
-        DockPanel.SetDock(_tDosya, Dock.Top); _tDosya.Margin = new Thickness(0, 0, 0, 10);
-        var govde = new DockPanel();
-        govde.Children.Add(_dosyaBaslik); govde.Children.Add(_tDosya); govde.Children.Add(_t);
-        Fill(govde);
 
-        _t.MouseDoubleClick += (_, _) =>
+        // ---- seçiciler
+        var sec = Ui.WRow(Ui.Muted("Müvekkil:", false), _mcombo, Ui.Muted("Dava:", false), _combo);
+        var seritScroll = new ScrollViewer { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = _serit, Margin = new Thickness(0, 0, 0, 10) };
+
+        // ---- başlık kartı
+        var info = new StackPanel(); info.Children.Add(_dTitle); info.Children.Add(_dSub); info.Children.Add(_dEtiket);
+        var eylem = Ui.WRow(Ui.Btn("⚖ Duruşma Notu", "Primary", DurusmaNotu), Ui.Btn("＋ Süreli İş", "Ok", SureEkle), Ui.Btn("⋯ Git", "", GitMenu));
+        eylem.HorizontalAlignment = HorizontalAlignment.Right; eylem.MaxWidth = 420;
+        var hg = new Grid();
+        hg.ColumnDefinitions.Add(new ColumnDefinition()); hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(eylem, 1);
+        hg.Children.Add(info); hg.Children.Add(eylem);
+        var hdr = new Border { CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Padding = new Thickness(18, 14, 18, 14), Margin = new Thickness(0, 0, 0, 10), Child = hg };
+        hdr.SetResourceReference(Border.BackgroundProperty, "surface");
+        hdr.SetResourceReference(Border.BorderBrushProperty, "border");
+
+        // ---- araç şeridi
+        _sayacBtn = Ui.Btn("▶ Sayaç Başlat", "", SayacDegistir);
+        var araclar = Ui.WRow(Ui.Btn("📞 Müvekkile Bildirdim", "", Bilgilendirme), _sayacBtn, Ui.Btn("＋ Zaman", "", ZamanEkle),
+                              Ui.Btn("📎 Evrak Ekle…", "", EvrakSec), Ui.Btn("🔒 Dosyayı Kapat / Aç", "", KapatAc), Ui.Btn("Seçili Kaydı Sil", "Danger", KayitSil));
+        araclar.Margin = new Thickness(0, 0, 0, 6);
+
+        // ---- özet kartları
+        var kpi = new UniformGrid { Columns = 6, Margin = new Thickness(0, 0, -10, 10) };
+        kpi.Children.Add(Mini("Açık süre", _kSure)); kpi.Children.Add(Mini("Sonraki duruşma", _kDur)); kpi.Children.Add(Mini("Tebligat", _kTeb));
+        kpi.Children.Add(Mini("Cari kalan", _kCari)); kpi.Children.Add(Mini("Masraf • emanet", _kMas)); kpi.Children.Add(Mini("Harcanan zaman", _kZaman));
+
+        // ---- zaman çizelgesi süzgeçleri
+        var chips = new WrapPanel { Margin = new Thickness(0, 4, 0, 10) };
+        foreach (var g in Gruplar)
         {
-            var c = _t.Current;
-            if (c != null && c.S("tur") == "Evrak" && c.S("yol").Length > 0 && File.Exists(c.S("yol"))) Ui.OpenExternal(c.S("yol"));
-        };
+            var gg = g;
+            var c = new TbBtn("", g, () => { _grup = gg; Cizelge(); });
+            _chip[g] = c; chips.Children.Add(c);
+        }
+        var tlBaslik = Ui.H2("Zaman çizelgesi"); tlBaslik.Margin = new Thickness(2, 6, 0, 4);
+
+        var sayfa = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
+        foreach (var e in new UIElement[] { sec, seritScroll, hdr, _step, araclar, kpi, tlBaslik, chips, _tl }) sayfa.Children.Add(e);
+        var kaydir = new ScrollViewer { Content = sayfa, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        Fill(kaydir);
+
         AllowDrop = true;
         PreviewDragOver += (_, e) => { e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None; e.Handled = true; };
         PreviewDrop += (_, e) =>
@@ -95,11 +113,13 @@ public class DosyaKartiPage : BasePage
 
     static Border Mini(string etiket, TextBlock deger)
     {
-        var b = new Border { CornerRadius = new CornerRadius(12), Padding = new Thickness(14, 10, 14, 10), Margin = new Thickness(0, 0, 10, 0), BorderThickness = new Thickness(1) };
-        b.SetResourceReference(Border.BackgroundProperty, "surface2");
+        var b = new Border { CornerRadius = new CornerRadius(14), Padding = new Thickness(14, 10, 14, 10), Margin = new Thickness(0, 0, 10, 0), BorderThickness = new Thickness(1) };
+        b.SetResourceReference(Border.BackgroundProperty, "surface");
         b.SetResourceReference(Border.BorderBrushProperty, "border");
         var sp = new StackPanel();
         sp.Children.Add(Ui.Muted(etiket, false));
+        deger.Margin = new Thickness(0, 3, 0, 0);
+        deger.TextTrimming = TextTrimming.CharacterEllipsis;
         sp.Children.Add(deger);
         b.Child = sp;
         return b;
@@ -107,9 +127,22 @@ public class DosyaKartiPage : BasePage
 
     static void Boya(TextBlock t, string brush) => t.SetResourceReference(TextBlock.ForegroundProperty, brush);
 
+    static Pill Etiket(string t, string kind) { var p = new Pill(t, kind); p.Margin = new Thickness(0, 0, 6, 4); return p; }
+
     long Secili => (_combo.SelectedItem as ComboItem)?.Value is { } v ? Convert.ToInt64(v) : 0;
 
     long MSecili => (_mcombo.SelectedItem as ComboItem)?.Value is { } v ? Convert.ToInt64(v) : 0;
+
+    void GitMenu()
+    {
+        var m = new ContextMenu();
+        void Ekle(string h, Action a) { var mi = new MenuItem { Header = h }; mi.Click += (_, _) => a(); m.Items.Add(mi); }
+        Ekle("İş Listesi", () => Ctx.Navigate("is_listesi", null));
+        Ekle("Dava Takibi", () => { DavaPage.Hedef = Secili; Ctx.Navigate("dava", null); });
+        Ekle("Emanet / Masraf", () => Ctx.Navigate("emanet", null));
+        Ekle("Müvekkil sayfası", () => Ctx.Navigate("muvekkil", null));
+        m.IsOpen = true;
+    }
 
     public override void Refresh()
     {
@@ -137,26 +170,56 @@ public class DosyaKartiPage : BasePage
         Yukle();
     }
 
-    /// <summary>Seçili müvekkilin davalarını hem listeye hem dava kutusuna doldurur.</summary>
+    /// <summary>Seçili müvekkilin davalarını dava kutusuna ve dosya şeridine doldurur.</summary>
     void DavaDoldur(long sec)
     {
         var mid = MSecili;
         var rows = mid > 0
             ? Db.Query("SELECT d.*, m.ad_soyad FROM davalar d LEFT JOIN muvekkiller m ON m.id=d.muvekkil_id WHERE d.muvekkil_id=? ORDER BY d.id DESC", mid)
             : Db.Query("SELECT d.*, m.ad_soyad FROM davalar d LEFT JOIN muvekkiller m ON m.id=d.muvekkil_id ORDER BY d.id DESC");
+        _seritRows = rows;
         _combo.Items.Clear();
         foreach (var d in rows)
             _combo.Items.Add(new ComboItem { Value = d.L("id"), Label = $"{d.S("mahkeme_adi")} {d.S("esas_no")} — {d.S("ad_soyad")}".Trim(' ', '—', ' ') });
-        _dosyaBaslik.Text = mid > 0 ? $"Müvekkilin dava dosyaları ({rows.Count})" : $"Tüm dava dosyaları ({rows.Count})";
-        _tDosya.Load(rows);
         var i = _combo.Items.Cast<ComboItem>().ToList().FindIndex(x => Convert.ToInt64(x.Value) == sec);
         _combo.SelectedIndex = i >= 0 ? i : (_combo.Items.Count > 0 ? 0 : -1);
-        DosyaSec(Secili);
+        SeritYaz();
     }
 
-    void DosyaSec(long id)
+    List<Row> _seritRows = new();
+
+    /// <summary>Müvekkilin dava dosyalarını yatay çiplerle gösterir; seçili olan vurgulanır.</summary>
+    void SeritYaz()
     {
-        if (id > 0) _tDosya.SelectId(id);
+        _serit.Children.Clear();
+        var secili = Secili;
+        foreach (var d in _seritRows)
+        {
+            var id = d.L("id");
+            var kapali = d.S("kapanis_tarihi").Length > 0;
+            var sp = new StackPanel();
+            var t1 = Ui.Text($"{d.S("esas_no")}  {d.S("mahkeme_adi")}", 12.5, true); t1.MaxWidth = 260; t1.TextTrimming = TextTrimming.CharacterEllipsis;
+            var t2 = Ui.Muted((MSecili == 0 && d.S("ad_soyad").Length > 0 ? d.S("ad_soyad") + " • " : "") + (kapali ? "🔒 kapalı" : d.S("asama_durum")), false);
+            t2.FontSize = 11.5; t2.MaxWidth = 260; t2.TextTrimming = TextTrimming.CharacterEllipsis;
+            sp.Children.Add(t1); sp.Children.Add(t2);
+            var b = new Border { CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(12, 7, 12, 7), Margin = new Thickness(0, 0, 8, 0), Child = sp, Cursor = Cursors.Hand };
+            bool s = id == secili;
+            b.SetResourceReference(Border.BackgroundProperty, s ? "sel" : "surface");
+            b.SetResourceReference(Border.BorderBrushProperty, s ? "accent" : "border");
+            b.MouseLeftButtonUp += (_, _) => DosyaGec(id);
+            _serit.Children.Add(b);
+        }
+        if (_seritRows.Count == 0) _serit.Children.Add(Ui.Muted("Bu müvekkilin dava dosyası yok. Önce Dava Takibi'nde dava ekleyin."));
+    }
+
+    void DosyaGec(long id)
+    {
+        if (id == Secili) return;
+        var it = _combo.Items.Cast<ComboItem>().FirstOrDefault(x => Convert.ToInt64(x.Value) == id);
+        if (it == null) return;
+        _busy = true;
+        try { _combo.SelectedItem = it; SeritYaz(); } finally { _busy = false; }
+        Yukle();
     }
 
     static Row Satir(string tarih, string tur, string aciklama, string tutar = "", string tablo = "", long kid = 0, string yol = "") => new()
@@ -166,30 +229,69 @@ public class DosyaKartiPage : BasePage
 
     static string Sure(long dk) => dk >= 60 ? $"{dk / 60} sa {dk % 60} dk" : $"{dk} dk";
 
+    static int AsamaNo(string a) { var i = Array.IndexOf(DavaPage.Asamalar, a); return i < 0 ? 0 : i; }
+
+    static string GunMetni(int? k) => k == null ? "" : k < 0 ? $"{-k} gün geçti" : k == 0 ? "bugün" : k == 1 ? "yarın" : $"{k} gün sonra";
+
+    static string Grup(string tur)
+    {
+        if (tur.StartsWith("SÜRE") || tur.StartsWith("Süre") || tur is "Duruşma" or "Aşama" or "Kapanış" or "Keşif" or "Toplantı" or "Diğer" or "Ajanda") return "Süre ve duruşma";
+        if (tur == "Tebligat") return "Tebligat";
+        if (tur is "Tahsilat" or "Masraf" || tur.StartsWith("Emanet")) return "Mali";
+        if (tur == "Evrak") return "Evrak";
+        return "Notlar";
+    }
+
+    /// <summary>tür → (simge, tema rengi anahtarı)</summary>
+    static (string Simge, string Renk) Gorunum(string tur)
+    {
+        if (tur.StartsWith("SÜRE")) return ("⏱", "danger");
+        if (tur.StartsWith("Süre")) return ("✔", "ok");
+        if (tur.StartsWith("Emanet")) return ("🏦", "muted");
+        return tur switch
+        {
+            "Duruşma" => ("⚖", "warn"), "Aşama" => ("▣", "accent"), "Kapanış" => ("🔒", "muted"), "Tebligat" => ("📬", "accent"),
+            "Duruşma notu" => ("📝", "accent"), "Müvekkil bilgi" => ("💬", "accent"), "Zaman" => ("⏳", "muted"), "Evrak" => ("📎", "accent"),
+            "Tahsilat" => ("💰", "ok"), "Masraf" => ("🧾", "warn"), "Keşif" or "Toplantı" or "Diğer" or "Ajanda" => ("📅", "accent"),
+            _ => ("•", "muted"),
+        };
+    }
+
     void Yukle()
     {
         SayacYaz();
         var id = Secili;
-        if (id == 0) { _bilgi.Text = "Dava seçin ya da önce 'Dava Takibi'nde dava ekleyin."; _ozet.Text = ""; _t.Load(new List<Row>()); _kSure.Text = _kDur.Text = _kCari.Text = _kZaman.Text = "—"; return; }
+        _sec = null; _secB = null;
+        if (id == 0)
+        {
+            _dTitle.Text = "Dava seçin"; _dSub.Text = "Üstten müvekkil ve dava seçin ya da önce 'Dava Takibi'nde dava ekleyin.";
+            _dEtiket.Children.Clear(); _step.Children.Clear(); _kayitlar = new();
+            _kSure.Text = _kDur.Text = _kTeb.Text = _kCari.Text = _kMas.Text = _kZaman.Text = "—";
+            Cizelge();
+            return;
+        }
         var d = Db.One("SELECT d.*, m.ad_soyad, m.telefon FROM davalar d LEFT JOIN muvekkiller m ON m.id=d.muvekkil_id WHERE d.id=?", id);
         if (d == null) return;
         var kapali = d.S("kapanis_tarihi").Length > 0;
-        _bilgi.Text = $"Müvekkil: {d.S("ad_soyad")} {(d.S("telefon").Length > 0 ? "• " + d.S("telefon") : "")}\n" +
-                      $"Mahkeme: {d.S("mahkeme_adi")} • Esas: {d.S("esas_no")} • Tür: {d.S("dava_turu")}\n" +
-                      $"Karşı taraf: {d.S("karsi_taraf")} • Aşama: {d.S("asama_durum")} • Duruşma: {Utils.FmtDate(d.S("durusma_tarihi"))}" +
-                      (kapali ? $"\n🔒 DOSYA KAPALI: {Utils.FmtDate(d.S("kapanis_tarihi"))} • saklama bitişi: {Utils.FmtDate(d.S("saklama_bitis"))}" : "");
+        _dTitle.Text = $"{d.S("mahkeme_adi")} • {d.S("esas_no")}";
+        _dSub.Text = $"Müvekkil: {d.S("ad_soyad")}" + (d.S("telefon").Length > 0 ? $" • {d.S("telefon")}" : "") +
+                     (d.S("karsi_taraf").Length > 0 ? $"   •   Karşı taraf: {d.S("karsi_taraf")}" : "");
+        _dEtiket.Children.Clear();
+        _dEtiket.Children.Add(Etiket(d.S("asama_durum"), d.S("asama_durum") == "Karara Çıktı" ? "ok" : "info"));
+        if (d.S("dava_turu").Length > 0) _dEtiket.Children.Add(Etiket(d.S("dava_turu"), "muted"));
+        if (kapali) _dEtiket.Children.Add(Etiket($"🔒 DOSYA KAPALI {Utils.FmtDate(d.S("kapanis_tarihi"))} • saklama bitişi {Utils.FmtDate(d.S("saklama_bitis"))}", "warn"));
+        StepYaz(d);
 
         var l = new List<Row>();
-        foreach (var (k, ad) in new[] { ("dava_dilekcesi_tarih", "Dava dilekçesi"), ("cevap_dilekcesi_tarih", "Cevap dilekçesi"),
-                                        ("cevaba_cevap_tarih", "Cevaba cevap"), ("ikinci_cevap_tarih", "İkinci cevap"), ("durusma_tarihi", "Duruşma") })
-            if (d.S(k).Length > 0) l.Add(Satir(d.S(k), "Aşama", ad));
-        if (kapali) l.Add(Satir(d.S("kapanis_tarihi"), "Kapanış", d.S("kapanis_notu")));
+        foreach (var (k, ad) in HmkAlan)
+            if (d.S(k).Length > 0) l.Add(Satir(d.S(k), k == "durusma_tarihi" ? "Duruşma" : "Aşama", ad));
+        if (kapali) l.Add(Satir(d.S("kapanis_tarihi"), "Kapanış", d.S("kapanis_notu").Length > 0 ? d.S("kapanis_notu") : "Dosya kapatıldı"));
         foreach (var r in Db.Query("SELECT * FROM ajanda WHERE dava_id=?", id))
             l.Add(Satir(r.S("tarih"), r.S("tur").Length > 0 ? r.S("tur") : "Ajanda", $"{r.S("saat")} {r.S("baslik")}".Trim()));
-        int acik = 0;
-        foreach (var r in Db.Query("SELECT * FROM sureler WHERE dava_id=?", id))
+        int acik = 0; string enYakin = "";
+        foreach (var r in Db.Query("SELECT * FROM sureler WHERE dava_id=? ORDER BY son_tarih", id))
         {
-            if (r.S("durum") == "Açık") acik++;
+            if (r.S("durum") == "Açık") { acik++; if (enYakin.Length == 0) enYakin = r.S("son_tarih"); }
             l.Add(Satir(r.S("son_tarih"), r.S("durum") == "Açık" ? "SÜRE (açık)" : "Süre (tamam)", $"{r.S("baslik")} • {r.S("dayanak")}"));
         }
         int teb = 0;
@@ -225,18 +327,162 @@ public class DosyaKartiPage : BasePage
             l.Add(Satir(r.S("tarih"), "Emanet " + r.S("tur"), r.S("aciklama"), Utils.FmtMoney(r.D("tutar"))));
         }
         var f = Db.One("SELECT SUM(toplam_ucret) t, SUM(alinan_tutar) a, SUM(kalan_bakiye) k FROM finans_tahsilat WHERE dava_id=?", id);
-        _kSure.Text = acik.ToString(); Boya(_kSure, acik > 0 ? "danger" : "text");
-        var durGun = Utils.DaysLeft(d.S("durusma_tarihi"));
-        _kDur.Text = d.S("durusma_tarihi").Length > 0 ? Utils.FmtDate(d.S("durusma_tarihi")) : "—";
-        Boya(_kDur, durGun != null && durGun >= 0 && durGun <= 7 ? "warn" : "text");
-        var kalan = f?.D("k") ?? 0;
-        _kCari.Text = Utils.FmtMoney(kalan); Boya(_kCari, kalan > 0 ? "warn" : "text");
-        _kZaman.Text = Sure(dk); Boya(_kZaman, "text");
-        _ozet.Text = $"Açık süre: {acik} • Tebligat: {teb} • Ücret: {Utils.FmtMoney(f?.D("t") ?? 0)} • Alınan: {Utils.FmtMoney(f?.D("a") ?? 0)} • Kalan: {Utils.FmtMoney(f?.D("k") ?? 0)}\n" +
-                     $"Dosya masrafı: {Utils.FmtMoney(masraf)} • Emanet bakiyesi: {Utils.FmtMoney(emanet)} • Harcanan zaman: {Sure(dk)}";
 
-        l = l.OrderByDescending(x => x.S("tarih")).ToList();
-        _t.Load(l, new() { ["tur"] = r => r.S("tur").StartsWith("SÜRE") ? "danger" : r.S("tur") == "Duruşma" ? "warn" : "" });
+        _kSure.Text = acik == 0 ? "Yok" : $"{acik} • {Utils.FmtDate(enYakin)}"; Boya(_kSure, acik > 0 ? "danger" : "ok");
+        var durGun = Utils.DaysLeft(d.S("durusma_tarihi"));
+        _kDur.Text = d.S("durusma_tarihi").Length == 0 ? "Yok" : durGun >= 0 ? $"{Utils.FmtDate(d.S("durusma_tarihi"))} ({GunMetni(durGun)})" : $"{Utils.FmtDate(d.S("durusma_tarihi"))} (geçti)";
+        Boya(_kDur, durGun != null && durGun >= 0 && durGun <= 7 ? "warn" : "text");
+        _kTeb.Text = teb.ToString(); Boya(_kTeb, "text");
+        var kalan = f?.D("k") ?? 0;
+        _kCari.Text = Utils.FmtMoney(kalan); Boya(_kCari, kalan > 0 ? "warn" : "ok");
+        _kMas.Text = $"{Utils.FmtMoney(masraf)} • {Utils.FmtMoney(emanet)}"; Boya(_kMas, "text");
+        _kZaman.Text = Sure(dk); Boya(_kZaman, "text");
+
+        _kayitlar = l.OrderByDescending(x => x.S("tarih")).ToList();
+        Cizelge();
+    }
+
+    // ------------------------------------------------------------------ aşama çubuğu
+    void StepYaz(Row d)
+    {
+        _step.Children.Clear();
+        var A = DavaPage.Asamalar;
+        _step.Columns = A.Length;
+        int no = AsamaNo(d.S("asama_durum"));
+        for (int i = 0; i < A.Length; i++)
+        {
+            int ii = i;
+            var num = new TextBlock { Text = (i + 1).ToString(), FontSize = 14, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center };
+            var ad = new TextBlock { Text = A[i], FontSize = 10.5, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0) };
+            var sp = new StackPanel(); sp.Children.Add(num); sp.Children.Add(ad);
+            var b = new Border { CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Padding = new Thickness(4, 6, 4, 6), Margin = new Thickness(0, 0, i == A.Length - 1 ? 0 : 5, 0), Child = sp, Cursor = Cursors.Hand, ToolTip = "Aşamayı “" + A[i] + "” yap" };
+            if (i < no) { b.Background = Theme.Alpha("ok", 40); b.SetResourceReference(Border.BorderBrushProperty, "ok"); num.SetResourceReference(TextBlock.ForegroundProperty, "ok"); ad.SetResourceReference(TextBlock.ForegroundProperty, "muted"); }
+            else if (i == no) { b.SetResourceReference(Border.BackgroundProperty, "accent"); b.SetResourceReference(Border.BorderBrushProperty, "accent"); num.Foreground = Brushes.White; ad.Foreground = Brushes.White; }
+            else { b.SetResourceReference(Border.BackgroundProperty, "surface2"); b.SetResourceReference(Border.BorderBrushProperty, "border"); num.SetResourceReference(TextBlock.ForegroundProperty, "muted"); ad.SetResourceReference(TextBlock.ForegroundProperty, "muted"); }
+            b.MouseLeftButtonUp += (_, _) => AsamaDegistir(ii);
+            _step.Children.Add(b);
+        }
+    }
+
+    void AsamaDegistir(int i)
+    {
+        var id = Secili;
+        if (id == 0) return;
+        var A = DavaPage.Asamalar;
+        var mevcut = Db.One("SELECT asama_durum FROM davalar WHERE id=?", id)?.S("asama_durum") ?? "";
+        if (mevcut == A[i]) return;
+        if (i == A.Length - 1 && !Ui.Confirm(this, "Dava “Karara Çıktı” olarak işaretlensin mi? (Dosyayı kapatmak için ‘Dosyayı Kapat’ kullanın.)")) return;
+        Db.Update("davalar", id, new Dictionary<string, object?> { ["asama_durum"] = A[i] });
+        Ctx.Status($"Aşama güncellendi: {A[i]}");
+        _busy = true; try { DavaDoldur(id); } finally { _busy = false; }
+        Yukle();
+    }
+
+    // ------------------------------------------------------------------ zaman çizelgesi
+    void Cizelge()
+    {
+        foreach (var kv in _chip)
+        {
+            kv.Value.Aktif(kv.Key == _grup);
+        }
+        _tl.Children.Clear();
+        _sec = null; _secB = null;
+        if (Secili == 0) return;
+        var liste = _grup == "Tümü" ? _kayitlar : _kayitlar.Where(r => Grup(r.S("tur")) == _grup).ToList();
+        if (liste.Count == 0)
+        {
+            var bos = Ui.Muted(_kayitlar.Count == 0 ? "Bu dosyada henüz kayıt yok. Duruşma notu, süreli iş, zaman ya da evrak ekleyerek başlayın." : "Bu başlıkta kayıt yok.");
+            bos.Margin = new Thickness(4, 10, 0, 0);
+            _tl.Children.Add(bos);
+            return;
+        }
+        var bugun = Utils.TodayIso();
+        bool cizdi = false;
+        for (int i = 0; i < liste.Count; i++)
+        {
+            var r = liste[i];
+            if (!cizdi && string.CompareOrdinal(r.S("tarih"), bugun) <= 0) { _tl.Children.Add(BugunCizgisi()); cizdi = true; }
+            _tl.Children.Add(Olay(r, i == liste.Count - 1));
+        }
+        if (!cizdi) _tl.Children.Add(BugunCizgisi());
+    }
+
+    static UIElement BugunCizgisi()
+    {
+        var g = new Grid { Margin = new Thickness(0, 2, 0, 10) };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition());
+        var t = Ui.Text($"BUGÜN • {DateTime.Today.ToString("d MMMM yyyy, dddd", Utils.Tr)}", 11.5, true, "accent");
+        t.Margin = new Thickness(0, 0, 10, 0);
+        var line = new Border { Height = 2, VerticalAlignment = VerticalAlignment.Center };
+        line.SetResourceReference(Border.BackgroundProperty, "accent");
+        Grid.SetColumn(line, 1);
+        g.Children.Add(t); g.Children.Add(line);
+        return g;
+    }
+
+    Grid Olay(Row r, bool son)
+    {
+        var (simge, renk) = Gorunum(r.S("tur"));
+        var g = new Grid();
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(92) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
+        g.ColumnDefinitions.Add(new ColumnDefinition());
+
+        var gelecek = string.CompareOrdinal(r.S("tarih"), Utils.TodayIso()) > 0;
+        var dt = Ui.Text(Utils.FmtDate(r.S("tarih")), 12.5, true, gelecek ? "accent" : "muted");
+        dt.HorizontalAlignment = HorizontalAlignment.Right; dt.VerticalAlignment = VerticalAlignment.Top; dt.Margin = new Thickness(0, 10, 4, 0);
+
+        var line = new Border { Width = 2, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = son ? VerticalAlignment.Top : VerticalAlignment.Stretch, Height = son ? 16 : double.NaN, Margin = new Thickness(0, 14, 0, 0) };
+        line.SetResourceReference(Border.BackgroundProperty, "border");
+        var dot = new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 10, 0, 0) };
+        dot.SetResourceReference(Border.BackgroundProperty, renk);
+        Grid.SetColumn(line, 1); Grid.SetColumn(dot, 1);
+
+        var tur = new TextBlock { Text = $"{simge}  {r.S("tur")}", FontSize = 12, FontWeight = FontWeights.SemiBold };
+        tur.SetResourceReference(TextBlock.ForegroundProperty, renk);
+        var ust = new DockPanel();
+        if (r.S("tutar").Length > 0)
+        {
+            var tt = Ui.Text(r.S("tutar"), 12.5, true); DockPanel.SetDock(tt, Dock.Right); ust.Children.Add(tt);
+        }
+        ust.Children.Add(tur);
+        var ac = Ui.Text(r.S("aciklama").Length > 0 ? r.S("aciklama") : "—", 13, false, "text", true);
+        ac.Margin = new Thickness(0, 3, 0, 0);
+        var sp = new StackPanel(); sp.Children.Add(ust); sp.Children.Add(ac);
+        var kart = new Border { CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(12, 8, 12, 9), Margin = new Thickness(0, 0, 0, 8), Child = sp, Cursor = Cursors.Hand };
+        kart.SetResourceReference(Border.BackgroundProperty, "surface");
+        kart.SetResourceReference(Border.BorderBrushProperty, "border");
+        Grid.SetColumn(kart, 2);
+        kart.MouseLeftButtonDown += (_, e) =>
+        {
+            KayitSec(kart, r);
+            if (e.ClickCount >= 2 && r.S("tur") == "Evrak" && r.S("yol").Length > 0)
+            {
+                if (File.Exists(r.S("yol"))) Ui.OpenExternal(r.S("yol")); else Ui.Warn(this, "Dosya bulunamadı:\n" + r.S("yol"));
+            }
+        };
+        kart.MouseRightButtonDown += (_, _) => KayitSec(kart, r);
+        var cm = new ContextMenu();
+        if (r.S("tur") == "Evrak" && r.S("yol").Length > 0)
+        {
+            var a = new MenuItem { Header = "Evrakı aç" }; a.Click += (_, _) => { if (File.Exists(r.S("yol"))) Ui.OpenExternal(r.S("yol")); }; cm.Items.Add(a);
+            var k = new MenuItem { Header = "Klasörde göster" }; k.Click += (_, _) => Ui.RevealInFolder(r.S("yol")); cm.Items.Add(k);
+        }
+        if (r.S("tablo").Length > 0)
+        {
+            var s = new MenuItem { Header = "Kaydı sil…" }; s.Click += (_, _) => { KayitSec(kart, r); KayitSil(); }; cm.Items.Add(s);
+        }
+        if (cm.Items.Count > 0) kart.ContextMenu = cm;
+        g.Children.Add(dt); g.Children.Add(line); g.Children.Add(dot); g.Children.Add(kart);
+        return g;
+    }
+
+    void KayitSec(Border b, Row r)
+    {
+        if (_secB != null) { _secB.SetResourceReference(Border.BackgroundProperty, "surface"); _secB.SetResourceReference(Border.BorderBrushProperty, "border"); }
+        _sec = r; _secB = b;
+        b.SetResourceReference(Border.BackgroundProperty, "sel");
+        b.SetResourceReference(Border.BorderBrushProperty, "accent");
     }
 
     // ------------------------------------------------------------------ süreli iş
@@ -466,7 +712,7 @@ public class DosyaKartiPage : BasePage
 
     void KayitSil()
     {
-        var c = _t.Current;
+        var c = _sec;
         if (c == null || c.S("tablo").Length == 0) { Ui.Info(this, "Silinebilen bir kayıt seçin (duruşma notu, müvekkil bilgi, zaman, evrak)."); return; }
         var ek = c.S("tablo") == "dava_evraklari" ? "\n(Dosyanın kendisi diskte kalır.)" : "";
         if (!Ui.Confirm(this, "Seçili kayıt silinsin mi?" + ek)) return;
