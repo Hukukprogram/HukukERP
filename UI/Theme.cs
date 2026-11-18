@@ -12,15 +12,15 @@ public static class Theme
     {
         ["dark"] = new()
         {
-            ["bg"] = "#0f141b", ["surface"] = "#171e28", ["surface2"] = "#1f2835", ["border"] = "#2a3544",
-            ["text"] = "#ffffff", ["muted"] = "#aab6c8", ["accent"] = "#4c8dff", ["accent_h"] = "#6ba1ff",
-            ["ok"] = "#2ecc8f", ["warn"] = "#f5a524", ["danger"] = "#ff5d6c", ["sidebar"] = "#0b1017", ["sel"] = "#223250",
+            ["bg"] = "#0d1117", ["surface"] = "#151b24", ["surface2"] = "#1c2430", ["border"] = "#273142",
+            ["text"] = "#f1f5fb", ["muted"] = "#9aa7bb", ["accent"] = "#5b8cff", ["accent_h"] = "#7aa2ff",
+            ["ok"] = "#34d39e", ["warn"] = "#f7b23b", ["danger"] = "#ff6b7a", ["sidebar"] = "#090d13", ["sel"] = "#1f2e4d",
         },
         ["light"] = new()
         {
-            ["bg"] = "#f3f5f9", ["surface"] = "#ffffff", ["surface2"] = "#eef1f6", ["border"] = "#d9dfe8",
-            ["text"] = "#1b2433", ["muted"] = "#66738a", ["accent"] = "#2f6fe4", ["accent_h"] = "#1f5ccc",
-            ["ok"] = "#12a56e", ["warn"] = "#d98a00", ["danger"] = "#d93f50", ["sidebar"] = "#1b2740", ["sel"] = "#dce8ff",
+            ["bg"] = "#f4f6fb", ["surface"] = "#ffffff", ["surface2"] = "#f0f3f9", ["border"] = "#e1e6ef",
+            ["text"] = "#161e2d", ["muted"] = "#6b7890", ["accent"] = "#3b6cf0", ["accent_h"] = "#2a58d6",
+            ["ok"] = "#12a56e", ["warn"] = "#d98a00", ["danger"] = "#e04557", ["sidebar"] = "#17233d", ["sel"] = "#e3ecff",
         },
     };
 
