@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using HukukErp.Core;
 using HukukErp.Services;
@@ -11,10 +13,10 @@ namespace HukukErp.UI.Pages;
 public class MuvekkilFinansPage : BasePage
 {
     static readonly string[] Siralar =
-        { "Ad Soyad (A → Z)", "Ad Soyad (Z → A)", "T.C. No", "Kalan bakiye (çoktan aza)", "Dava sayısı (çoktan aza)", "Son eklenen" };
+        { "Ad Soyad (A → Z)", "Ad Soyad (Z → A)", "T.C. No", "Kalan bakiye (çoktan aza)", "Dava sayısı (çoktan aza)", "Son eklenen", "Sonraki duruşma (yakın → uzak)" };
 
     readonly DataTable _tM = new(("T.C. No", "tc_no", null), ("Ad Soyad", "ad_soyad", null), ("Telefon", "telefon", null), ("E-posta", "eposta", null),
-        ("Dava", "dsay", null), ("Vekaletname", "vek", null), ("Kalan Bakiye", "kalan", Fmt.Money));
+        ("Dava", "dsay", null), ("Sonraki Duruşma", "durusma", Fmt.Date), ("Vekaletname", "vek", null), ("Kalan Bakiye", "kalan", Fmt.Money));
     readonly DataTable _tF = new(("Dava Dosyası", "dava_etiket", null), ("Dosya Konusu", "dosya_konusu", null), ("Toplam Ücret", "toplam_ucret", Fmt.Money),
         ("Alınan", "alinan_tutar", Fmt.Money), ("Kalan Bakiye", "kalan_bakiye", Fmt.Money), ("Sonraki Tahsilat", "sonraki_tahsilat_tarihi", Fmt.Date),
         ("Makbuz", "makbuz_kesildi", v => v != null && Convert.ToInt64(v) != 0 ? "Kesildi" : "Bekliyor"));
@@ -33,6 +35,16 @@ public class MuvekkilFinansPage : BasePage
     readonly ComboBox _sira = new() { MinWidth = 220, Margin = new Thickness(0, 0, 8, 0) };
     readonly ContentControl _host = new();
     readonly TabControl _tabs = new();
+    enum Fl { Tumu, Bakiye, VekYok, Davali, DavasiYok }
+    Fl _fl = Fl.Tumu;
+    readonly Dictionary<Fl, TbBtn> _chip = new();
+    static TextBlock KV(double boyut = 22) => Ui.Text("–", boyut, true);
+    readonly TextBlock _kTop = KV(), _kBak = KV(18), _kVek = KV(), _kDav = KV();
+    readonly TextBlock _dkTop = KV(18), _dkAl = KV(18), _dkKal = KV(18), _dkDav = KV(18), _dkDur = KV(18);
+    readonly TextBlock _avatar = Ui.Text("", 20, true);
+    readonly TextBlock _dNot = Ui.Text("", 12, false, "warn", true);
+    readonly DataTable _tS = new(("Son Gün", "son_tarih", Fmt.Date), ("Süre / İş", "baslik", null), ("Dava", "dava", null), ("Durum", "durum", null));
+    TabItem _tabF = null!, _tabV = null!, _tabD = null!, _tabS = null!;
     UIElement _liste = null!, _detay = null!;
     Row? _mSel;
     long _sid;
@@ -50,6 +62,14 @@ public class MuvekkilFinansPage : BasePage
         _sira.SelectedIndex = 0;
         _sira.SelectionChanged += (_, _) => { if (!_busy) ListeYukle(); };
         _ara.TextChanged += (_, _) => { if (!_busy) ListeYukle(); };
+        _ara.KeyDown += (_, e) => { if (e.Key == Key.Escape) { _ara.Text = ""; e.Handled = true; } };
+        _tS.MouseDoubleClick += (_, _) => Ctx.Navigate("is_listesi", null);
+        // Esc: müvekkil detayından listeye dön (yazı yazarken değil)
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape && ReferenceEquals(_host.Content, _detay) && Keyboard.FocusedElement is not TextBox) { Geri(); e.Handled = true; }
+        };
+        ListeMenusu();
 
         _tM.MouseDoubleClick += (_, e) => { if (SatirdaMi(e.OriginalSource as DependencyObject)) Ac(_tM.Current); };
         _tM.PreviewKeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Enter) { Ac(_tM.Current); e.Handled = true; } };
@@ -99,24 +119,135 @@ public class MuvekkilFinansPage : BasePage
     }
 
     // ------------------------------------------------------------ liste
+    static Border Kart(string et, TextBlock v)
+    {
+        var sp = new StackPanel();
+        sp.Children.Add(Ui.Muted(et, false));
+        v.Margin = new Thickness(0, 4, 0, 0);
+        sp.Children.Add(v);
+        var b = new Border { CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(16, 12, 16, 12), Margin = new Thickness(0, 0, 10, 0), Child = sp };
+        b.SetResourceReference(Border.BackgroundProperty, "surface");
+        b.SetResourceReference(Border.BorderBrushProperty, "border");
+        return b;
+    }
+
     UIElement BuildListe()
     {
         var dock = new DockPanel();
-        var bar = Ui.HRow(Ui.Btn("＋ Müvekkil", "Primary", AddM), Ui.Muted("Ara:", false), _ara, Ui.Muted("Sırala:", false), _sira);
-        bar.Margin = new Thickness(0, 0, 0, 8);
+        var kpi = new UniformGrid { Columns = 4, Margin = new Thickness(0, 0, -10, 12) };
+        kpi.Children.Add(Kart("Toplam müvekkil", _kTop));
+        kpi.Children.Add(Kart("Bakiyesi olan", _kBak));
+        kpi.Children.Add(Kart("Vekaletnamesi eksik", _kVek));
+        kpi.Children.Add(Kart("Davası olan", _kDav));
+        DockPanel.SetDock(kpi, Dock.Top);
+
+        var bar = Ui.WRow(Ui.Btn("＋ Müvekkil", "Primary", AddM), Ui.Muted("Ara:", false), _ara, Ui.Muted("Sırala:", false), _sira);
         DockPanel.SetDock(bar, Dock.Top);
+
+        var chips = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        foreach (var (f, ad) in new[] { (Fl.Tumu, "Tümü"), (Fl.Bakiye, "Bakiyesi olanlar"), (Fl.VekYok, "Vekaletnamesi eksik"), (Fl.Davali, "Davası olanlar"), (Fl.DavasiYok, "Davası olmayanlar") })
+        {
+            var ff = f;
+            var c = new TbBtn("", ad, () => { _fl = ff; ListeYukle(); });
+            _chip[f] = c; chips.Children.Add(c);
+        }
+        DockPanel.SetDock(chips, Dock.Top);
         DockPanel.SetDock(_sayi, Dock.Bottom); _sayi.Margin = new Thickness(0, 6, 0, 0);
-        dock.Children.Add(bar); dock.Children.Add(_sayi); dock.Children.Add(_tM);
+        dock.Children.Add(kpi); dock.Children.Add(bar); dock.Children.Add(chips); dock.Children.Add(_sayi); dock.Children.Add(_tM);
         return dock;
+    }
+
+    // ---- satıra sağ tık menüsü
+    void ListeMenusu()
+    {
+        var cm = new ContextMenu();
+        void Ekle(string h, Action<Row> a)
+        {
+            var mi = new MenuItem { Header = h };
+            mi.Click += (_, _) => { var r = _tM.Current; if (r != null) a(r); };
+            cm.Items.Add(mi);
+        }
+        Ekle("Aç (cari, vekalet, davalar)", r => Ac(r));
+        Ekle("Tahsilat ekle", r => { Ac(r); TahsilatEkle(); });
+        Ekle("Düzenle", r => Gecici(r, EditM));
+        cm.Items.Add(new Separator());
+        Ekle("WhatsApp'ta yaz", r => WhatsApp(r));
+        Ekle("E-posta yaz", r => Eposta(r));
+        Ekle("Telefonu kopyala", r => Kopyala(r.S("telefon"), "Telefon"));
+        Ekle("T.C. numarasını kopyala", r => Kopyala(r.S("tc_no"), "T.C. no"));
+        cm.Items.Add(new Separator());
+        Ekle("Sil…", r => Gecici(r, DelM));
+        _tM.ContextMenu = cm;
+        _tM.ContextMenuOpening += (_, e) => { if (_tM.Current == null) e.Handled = true; };
+        _tM.PreviewMouseRightButtonDown += (_, e) =>
+        {
+            var d = e.OriginalSource as DependencyObject;
+            while (d != null && d is not DataGridRow) d = d is Visual ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
+            if (d is DataGridRow row) row.IsSelected = true;
+        };
+    }
+
+    /// <summary>Listedeki satır için, detay açmadan, müvekkil seçili gibi işlem yapar.</summary>
+    void Gecici(Row r, Action a)
+    {
+        var s0 = _sid; var m0 = _mSel;
+        _sid = r.L("id"); _mSel = Db.One("SELECT * FROM muvekkiller WHERE id=?", _sid);
+        try { a(); } finally { _sid = s0; _mSel = m0; }
+    }
+
+    static string Numara(string tel)
+    {
+        var d = new string(tel.Where(char.IsDigit).ToArray());
+        if (d.StartsWith("00")) d = d[2..];
+        else if (d.StartsWith("0")) d = "90" + d[1..];
+        else if (d.Length == 10) d = "90" + d;
+        return d;
+    }
+
+    void WhatsApp(Row m)
+    {
+        var n = Numara(m.S("telefon"));
+        if (n.Length < 10) { Ui.Info(this, "Bu müvekkilin geçerli bir telefon numarası yok. Düzenle ile ekleyin."); return; }
+        Ui.OpenExternal("https://wa.me/" + n);
+    }
+
+    void Eposta(Row m)
+    {
+        if (m.S("eposta").Trim().Length == 0) { Ui.Info(this, "Bu müvekkilin e-posta adresi yok. Düzenle ile ekleyin."); return; }
+        Ui.OpenExternal("mailto:" + m.S("eposta").Trim());
+    }
+
+    void Kopyala(string metin, string ad)
+    {
+        if (metin.Length == 0) { Ui.Info(this, $"{ad} kayıtlı değil."); return; }
+        try { Clipboard.SetText(metin); Ctx.Status($"{ad} panoya kopyalandı: {metin}"); } catch (Exception) { }
     }
 
     void ListeYukle()
     {
         var rows = Db.Query("SELECT m.*, (SELECT COUNT(*) FROM vekaletnameler v WHERE v.muvekkil_id=m.id) AS vsay, " +
                             "(SELECT COUNT(*) FROM davalar d WHERE d.muvekkil_id=m.id) AS dsay, " +
+                            "(SELECT MIN(d.durusma_tarihi) FROM davalar d WHERE d.muvekkil_id=m.id AND d.durusma_tarihi!='' AND d.durusma_tarihi>=date('now') AND d.asama_durum!='Karara Çıktı') AS durusma, " +
                             "(SELECT COALESCE(SUM(f.kalan_bakiye),0) FROM finans_tahsilat f WHERE f.muvekkil_id=m.id) AS kalan FROM muvekkiller m");
         var toplam = rows.Count;
         foreach (var m in rows) m["vek"] = m.L("vsay") > 0 ? $"✔ {m.L("vsay")} adet" : "—";
+
+        // özet kartları (filtreden bağımsız)
+        var bakiyeli = rows.Where(m => m.D("kalan") > 0).ToList();
+        _kTop.Text = toplam.ToString();
+        _kBak.Text = bakiyeli.Count == 0 ? "Yok" : $"{bakiyeli.Count} • {Utils.FmtMoney(bakiyeli.Sum(m => m.D("kalan")))}";
+        _kVek.Text = rows.Count(m => m.L("vsay") == 0).ToString();
+        _kDav.Text = rows.Count(m => m.L("dsay") > 0).ToString();
+        foreach (var kv in _chip) kv.Value.Aktif(kv.Key == _fl);
+
+        rows = _fl switch
+        {
+            Fl.Bakiye => bakiyeli,
+            Fl.VekYok => rows.Where(m => m.L("vsay") == 0).ToList(),
+            Fl.Davali => rows.Where(m => m.L("dsay") > 0).ToList(),
+            Fl.DavasiYok => rows.Where(m => m.L("dsay") == 0).ToList(),
+            _ => rows,
+        };
         var q = Utils.TrLower(_ara.Text.Trim());
         if (q.Length > 0)
             rows = rows.Where(m => Utils.TrLower($"{m.S("ad_soyad")} {m.S("tc_no")} {m.S("telefon")} {m.S("eposta")}").Contains(q)).ToList();
@@ -128,25 +259,54 @@ public class MuvekkilFinansPage : BasePage
             3 => rows.OrderByDescending(x => x.D("kalan")).ThenBy(x => x.S("ad_soyad"), cmp).ToList(),
             4 => rows.OrderByDescending(x => x.L("dsay")).ThenBy(x => x.S("ad_soyad"), cmp).ToList(),
             5 => rows.OrderByDescending(x => x.L("id")).ToList(),
+            6 => rows.OrderBy(x => x.S("durusma").Length == 0).ThenBy(x => x.S("durusma"), StringComparer.Ordinal).ThenBy(x => x.S("ad_soyad"), cmp).ToList(),
             _ => rows.OrderBy(x => x.S("ad_soyad"), cmp).ToList(),
         };
-        _tM.Load(rows, new() { ["kalan"] = r => r.D("kalan") > 0 ? "warn" : "muted" });
-        _sayi.Text = q.Length > 0 ? $"{rows.Count} / {toplam} müvekkil" : $"{toplam} müvekkil";
+        _tM.Load(rows, new() { ["kalan"] = r => r.D("kalan") > 0 ? "warn" : "muted", ["durusma"] = r => Ui.DeadlineKind(r.S("durusma")) });
+        _sayi.Text = (q.Length > 0 || _fl != Fl.Tumu) ? $"{rows.Count} / {toplam} müvekkil gösteriliyor" : $"{toplam} müvekkil";
     }
 
     // ------------------------------------------------------------ detay (müvekkile tıklayınca)
     UIElement BuildDetay()
     {
         var dock = new DockPanel();
-        var bar = Ui.HRow(Ui.Btn("← Müvekkil listesi", "", Geri), Ui.Btn("Düzenle", "", EditM), Ui.Btn("Sil", "Danger", DelM));
-        bar.Margin = new Thickness(0, 0, 0, 8);
-        DockPanel.SetDock(bar, Dock.Top);
-        DockPanel.SetDock(_dTitle, Dock.Top); DockPanel.SetDock(_dSub, Dock.Top);
-        _dSub.Margin = new Thickness(0, 0, 0, 8);
-        dock.Children.Add(bar); dock.Children.Add(_dTitle); dock.Children.Add(_dSub);
-        _tabs.Items.Add(Ui.Tab("Cari Hesap & Tahsilat", BuildFinans()));
-        _tabs.Items.Add(Ui.Tab("Vekaletnameler", BuildVekalet()));
-        _tabs.Items.Add(Ui.Tab("Dava Dosyaları", BuildDavalar()));
+        var geri = Ui.Btn("← Müvekkil listesi  (Esc)", "", Geri);
+        geri.HorizontalAlignment = HorizontalAlignment.Left; geri.Margin = new Thickness(0, 0, 0, 10);
+        DockPanel.SetDock(geri, Dock.Top);
+
+        // başlık kartı: avatar + kimlik + hızlı eylemler
+        var av = new Border { Width = 58, Height = 58, CornerRadius = new CornerRadius(29), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 14, 0), Child = _avatar };
+        av.SetResourceReference(Border.BackgroundProperty, "accent");
+        _avatar.Foreground = Brushes.White; _avatar.HorizontalAlignment = HorizontalAlignment.Center;
+        _dTitle.FontSize = 21; _dSub.TextWrapping = TextWrapping.Wrap; _dNot.Margin = new Thickness(0, 4, 0, 0);
+        var info = new StackPanel(); info.Children.Add(_dTitle); info.Children.Add(_dSub); info.Children.Add(_dNot);
+        var eylem = Ui.WRow(Ui.Btn("💬 WhatsApp", "", () => { if (_mSel != null) WhatsApp(_mSel); }),
+                            Ui.Btn("✉ E-posta", "", () => { if (_mSel != null) Eposta(_mSel); }),
+                            Ui.Btn("Düzenle", "", EditM), Ui.Btn("Sil", "Danger", DelM));
+        eylem.HorizontalAlignment = HorizontalAlignment.Right; eylem.MaxWidth = 440;
+        var hg = new Grid();
+        hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        hg.ColumnDefinitions.Add(new ColumnDefinition());
+        hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(info, 1); Grid.SetColumn(eylem, 2);
+        hg.Children.Add(av); hg.Children.Add(info); hg.Children.Add(eylem);
+        var hdr = new Border { CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Padding = new Thickness(18, 14, 18, 14), Margin = new Thickness(0, 0, 0, 10), Child = hg };
+        hdr.SetResourceReference(Border.BackgroundProperty, "surface");
+        hdr.SetResourceReference(Border.BorderBrushProperty, "border");
+        DockPanel.SetDock(hdr, Dock.Top);
+
+        var kpi = new UniformGrid { Columns = 5, Margin = new Thickness(0, 0, -10, 10) };
+        kpi.Children.Add(Kart("Toplam ücret", _dkTop)); kpi.Children.Add(Kart("Alınan", _dkAl)); kpi.Children.Add(Kart("Kalan bakiye", _dkKal));
+        kpi.Children.Add(Kart("Açık dava", _dkDav)); kpi.Children.Add(Kart("Sonraki duruşma", _dkDur));
+        DockPanel.SetDock(kpi, Dock.Top);
+
+        dock.Children.Add(geri); dock.Children.Add(hdr); dock.Children.Add(kpi);
+        _tabF = Ui.Tab("Cari Hesap & Tahsilat", BuildFinans());
+        _tabV = Ui.Tab("Vekaletnameler", BuildVekalet());
+        _tabD = Ui.Tab("Dava Dosyaları", BuildDavalar());
+        var sb = new DockPanel(); sb.Children.Add(_tS);
+        _tabS = Ui.Tab("Süreler", sb);
+        _tabs.Items.Add(_tabF); _tabs.Items.Add(_tabD); _tabs.Items.Add(_tabS); _tabs.Items.Add(_tabV);
         dock.Children.Add(_tabs);
         return dock;
     }
@@ -171,12 +331,43 @@ public class MuvekkilFinansPage : BasePage
     void DetayYukle()
     {
         if (_mSel == null) return;
-        _dTitle.Text = $"{_mSel.S("ad_soyad")} • T.C. {_mSel.S("tc_no")}";
-        _dSub.Text = string.Join("  •  ", new[] { _mSel.S("telefon"), _mSel.S("eposta"), _mSel.S("adres") }.Where(s => s.Length > 0));
+        var ad = _mSel.S("ad_soyad").Trim();
+        var parcalar = ad.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        _avatar.Text = parcalar.Length == 0 ? "?" : (parcalar.Length == 1 ? parcalar[0][..1] : parcalar[0][..1] + parcalar[^1][..1]).ToUpper(new CultureInfo("tr-TR"));
+        _dTitle.Text = ad;
+        _dSub.Text = string.Join("   •   ", new[] { "T.C. " + _mSel.S("tc_no"), _mSel.S("telefon"), _mSel.S("eposta"), _mSel.S("adres") }.Where(s => s.Length > 0 && s != "T.C. "));
+        _dNot.Text = _mSel.S("notlar").Trim().Length > 0 ? "📌 " + _mSel.S("notlar").Trim() : "";
+        _dNot.Visibility = _dNot.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         LoadVekalet();
         LoadCari();
         LoadHareket();
         LoadDavalar();
+        LoadSureler();
+        Ozet();
+    }
+
+    void Ozet()
+    {
+        var f = Db.One("SELECT COALESCE(SUM(toplam_ucret),0) AS t, COALESCE(SUM(alinan_tutar),0) AS a, COALESCE(SUM(kalan_bakiye),0) AS k FROM finans_tahsilat WHERE muvekkil_id=?", _sid);
+        _dkTop.Text = Utils.FmtMoney(f?.D("t") ?? 0);
+        _dkAl.Text = Utils.FmtMoney(f?.D("a") ?? 0);
+        _dkKal.Text = Utils.FmtMoney(f?.D("k") ?? 0);
+        _dkKal.SetResourceReference(TextBlock.ForegroundProperty, (f?.D("k") ?? 0) > 0 ? "warn" : "ok");
+        _dkDav.Text = Db.ScalarL("SELECT COUNT(*) FROM davalar WHERE muvekkil_id=? AND asama_durum!='Karara Çıktı'", _sid).ToString();
+        var dur = Db.One("SELECT MIN(durusma_tarihi) AS d FROM davalar WHERE muvekkil_id=? AND durusma_tarihi!='' AND durusma_tarihi>=? AND asama_durum!='Karara Çıktı'", _sid, Utils.TodayIso())?.S("d") ?? "";
+        var k = Utils.DaysLeft(dur);
+        _dkDur.Text = dur.Length == 0 ? "Yok" : $"{Utils.FmtDate(dur)} ({(k == 0 ? "bugün" : k + " gün")})";
+        _tabF.Header = $"Cari Hesap & Tahsilat ({_tF.Rows.Count})";
+        _tabD.Header = $"Dava Dosyaları ({_tDv.Rows.Count})";
+        _tabS.Header = $"Süreler ({_tS.Rows.Count(r => r.S("durum") == "Açık")} açık)";
+        _tabV.Header = $"Vekaletnameler ({_tV.Rows.Count})";
+    }
+
+    void LoadSureler()
+    {
+        _tS.Load(Db.Query("SELECT sr.*, TRIM(COALESCE(d.mahkeme_adi,'') || ' ' || COALESCE(d.esas_no,'')) AS dava FROM sureler sr " +
+                          "JOIN davalar d ON d.id=sr.dava_id WHERE d.muvekkil_id=? ORDER BY sr.durum='Açık' DESC, sr.son_tarih", _sid),
+            new() { ["son_tarih"] = r => r.S("durum") == "Açık" ? Ui.DeadlineKind(r.S("son_tarih")) : "muted" });
     }
 
     UIElement BuildVekalet()
@@ -292,7 +483,7 @@ public class MuvekkilFinansPage : BasePage
         var f = new List<Field>
         {
             new("tc_no", "T.C. Kimlik No", required: true), new("ad_soyad", "Ad Soyad", required: true),
-            new("telefon", "Telefon"), new("eposta", "E-posta"), new("adres", "Adres", "multiline"),
+            new("telefon", "Telefon"), new("eposta", "E-posta"), new("adres", "Adres", "multiline"), new("notlar", "Not (yalnızca iç kullanım)", "multiline"),
         };
         if (withPdf) f.Add(new Field("pdf", "Vekaletname (PDF)", "file"));
         return f;
@@ -561,6 +752,7 @@ public class MuvekkilFinansPage : BasePage
             ListeYukle();
         }
         finally { _busy = false; }
+        if (ReferenceEquals(_host.Content, _liste)) _ara.Focus();
         if (_sid > 0 && ReferenceEquals(_host.Content, _detay))
         {
             _mSel = Db.One("SELECT * FROM muvekkiller WHERE id=?", _sid);
