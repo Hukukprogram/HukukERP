@@ -388,7 +388,7 @@ public class AjandaPage : BasePage
     void Ac(AjandaItem it)
     {
         if (it.Kaynak == "ajanda") Duzenle(it.Id);
-        else if (it.Kaynak == "dava") Ctx.Navigate("dava", null);
+        else if (it.Kaynak == "dava") { DavaPage.Hedef = it.Id; Ctx.Navigate("dava", null); }
         else if (it.Kaynak == "is") Ctx.Navigate("is_listesi", null);
     }
 
