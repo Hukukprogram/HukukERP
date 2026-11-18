@@ -127,7 +127,8 @@ public class DashboardPage : BasePage
         var bugunIso = Utils.TodayIso();
         long nSure = d.ScalarL("SELECT COUNT(*) FROM sureler WHERE durum='Açık' AND son_tarih!='' AND son_tarih<=?", bugunIso);
         long nDur = d.ScalarL("SELECT COUNT(*) FROM davalar WHERE durusma_tarihi!='' AND durusma_tarihi>=? AND durusma_tarihi<=date('now','+7 day') AND asama_durum!='Karara Çıktı'", bugunIso);
-        long nTeb = d.ScalarL("SELECT COUNT(*) FROM genel_tebligatlar WHERE durum=?", Workflows.QAvukat);
+        long nUetsYeni = UetsEsitleme.YeniSayisi(d);
+        long nTeb = d.ScalarL("SELECT COUNT(*) FROM genel_tebligatlar WHERE durum=?", Workflows.QAvukat) + nUetsYeni;
         double gec = d.ScalarD("SELECT COALESCE(SUM(kalan_bakiye),0) FROM finans_tahsilat WHERE kalan_bakiye>0 AND sonraki_tahsilat_tarihi!='' AND sonraki_tahsilat_tarihi<=?", bugunIso);
         _kSure.Text = nSure.ToString(); Boya(_kSure, nSure > 0 ? "danger" : "text");
         _kDurusma.Text = nDur.ToString(); Boya(_kDurusma, "text");
@@ -135,12 +136,21 @@ public class DashboardPage : BasePage
         _kTahsilat.Text = Utils.FmtMoney(gec); Boya(_kTahsilat, gec > 0 ? "warn" : "text");
         var parcalar = new List<string>();
         if (nSure > 0) parcalar.Add($"{nSure} süre bugün bitiyor ya da gecikti");
-        if (nTeb > 0) parcalar.Add($"{nTeb} bekleyen tebligat");
+        if (nUetsYeni > 0) parcalar.Add($"UETS'te {nUetsYeni} yeni tebligat göründü");
+        if (nTeb - nUetsYeni > 0) parcalar.Add($"{nTeb - nUetsYeni} bekleyen tebligat");
         _ozet.Text = DateTime.Today.ToString("dd MMMM yyyy, dddd", Utils.Tr) + (parcalar.Count > 0 ? "  •  " + string.Join(", ", parcalar) : "  •  acil bir iş görünmüyor");
         // Şirket UETS bildirimleri
         _cUets.Clear();
-        var ts = d.Query("SELECT * FROM genel_tebligatlar WHERE hesap_tipi='Sahsi' ORDER BY id DESC LIMIT 5");
-        if (ts.Count == 0) _cUets.AddEmpty("Henüz tebligat yok");
+        var yeniler = d.Query("SELECT * FROM uets_liste WHERE hesap_tipi='Sahsi' AND durum='Yeni' ORDER BY id DESC LIMIT 5");
+        foreach (var y in yeniler)
+        {
+            var baslik = (y.S("kurum").Length > 0 ? y.S("kurum") : "UETS tebligatı") + (y.S("esas_no").Length > 0 ? " – " + y.S("esas_no") : "");
+            var tarih = y.S("tarih").Length > 0 ? Utils.FmtDate(y.S("tarih")) : "";
+            _cUets.AddRow(Ui.Text($"🆕 {baslik}" + (tarih.Length > 0 ? $"  ({tarih})" : ""), 13, true, "text", true),
+                          Ui.HRow(new Pill("UETS'te Yeni", "warn"), new Pill("Henüz açılmadı", "muted")));
+        }
+        var ts = d.Query("SELECT * FROM genel_tebligatlar WHERE hesap_tipi='Sahsi' ORDER BY id DESC LIMIT ?", Math.Max(0, 5 - yeniler.Count));
+        if (ts.Count == 0 && yeniler.Count == 0) _cUets.AddEmpty("Henüz tebligat yok");
         foreach (var t in ts)
         {
             var kurum = t.S("gonderen_kurum").Length > 0 ? t.S("gonderen_kurum") : "Tebligat";

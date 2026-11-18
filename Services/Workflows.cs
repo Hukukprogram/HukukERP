@@ -39,6 +39,8 @@ public static class Workflows
             ["ayrisan_json"] = ayr.ToJson(), ["dava_id"] = DosyaEsleme.DavaBul(db, ayr.Kurum, ayr.EsasNo),
         });
 
+        UetsEsitleme.Isle(db, ayr.EsasNo);
+
         if (bildir)
         {
             var s = db.GetSettings();

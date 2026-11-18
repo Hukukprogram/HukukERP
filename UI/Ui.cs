@@ -19,6 +19,7 @@ public class AppCtx
     public Config Cfg { get; init; } = null!;
     public Action<string> SetTheme { get; set; } = _ => { };
     public Action<string> Status { get; set; } = _ => { };
+    public Action? RefreshChrome { get; set; }
     public Action<string, string?> Navigate { get; set; } = (_, _) => { };
 }
 

@@ -15,7 +15,8 @@ public class UetsCenterPage : BasePage
 {
     readonly string _tip;
     readonly string _kuyrukDurum;
-    readonly DataTable _tQ, _tA;
+    readonly DataTable _tQ, _tA, _tN;
+    readonly TextBlock _yeniBilgi = Ui.Muted("", false);
     readonly TextBlock _log = Ui.Muted("", false);
     readonly PdfPreview _preview = new();
     readonly TabControl _mainTabs = new();
@@ -67,9 +68,22 @@ public class UetsCenterPage : BasePage
         var split = Ui.HSplit(inner, prev, 7, 5);
         split.Margin = new Thickness(0, 8, 0, 0);
 
-        _browser = new UetsBrowser(ctx, tip, Hesaplar, Refresh);
+        _browser = new UetsBrowser(ctx, tip, Hesaplar, () => { Refresh(); ctx.RefreshChrome?.Invoke(); });
+
+        _tN = new DataTable(("Tarih", "tarih", Fmt.Date), ("Kurum", "kurum", null), ("Esas", "esas_no", null), ("Konu", "konu", null),
+                            ("Durum", "durum", null), ("İlk görülme", "ilk_gorulme", null));
+        var nb = Ui.FRow(Ui.Btn("✔ Görüldü", "Seçili satırı görüldü say", "Ok", () => YeniGordu(false)),
+                         Ui.Btn("✔✔ Tümünü görüldü say", "Listedeki tüm yeni satırları görüldü say", "", () => YeniGordu(true)),
+                         Ui.Btn("🌐 UETS'i Aç", "UETS sekmesine geç; tebligatı kendiniz açın", "", ShowBrowser));
+        DockPanel.SetDock(nb, Dock.Bottom); nb.Margin = new Thickness(0, 8, 0, 0);
+        _yeniBilgi.Margin = new Thickness(0, 8, 0, 0);
+        DockPanel.SetDock(_yeniBilgi, Dock.Top);
+        var nDock = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
+        nDock.Children.Add(_yeniBilgi); nDock.Children.Add(nb); nDock.Children.Add(_tN);
+
         _mainTabs.Items.Add(Ui.Tab("Kuyruk & Arşiv", split));
         _mainTabs.Items.Add(Ui.Tab("UETS (Tarayıcı)", _browser));
+        _mainTabs.Items.Add(Ui.Tab("UETS'te Yeni Tebligatlar", nDock));
         _mainTabs.SelectionChanged += (s, e) =>
         {
             if (!ReferenceEquals(e.OriginalSource, _mainTabs)) return;
@@ -97,6 +111,21 @@ public class UetsCenterPage : BasePage
                  null);
         _tA.Load(Db.Query($"SELECT g.*, {isDurum} FROM genel_tebligatlar g WHERE g.hesap_tipi=? ORDER BY g.id DESC LIMIT 500", _tip),
                  new() { ["durum"] = r => Ui.StatusKind(r.S("durum")) });
+        _tN.Load(Db.Query("SELECT * FROM uets_liste WHERE hesap_tipi=? ORDER BY CASE durum WHEN 'Yeni' THEN 0 ELSE 1 END, id DESC LIMIT 300", _tip),
+                 new() { ["durum"] = r => r.S("durum") == "Yeni" ? "warn" : "ok" });
+        var yeni = UetsEsitleme.YeniSayisi(Db);
+        var son = Cfg.GetString("uets_son_esitleme");
+        _yeniBilgi.Text = (yeni > 0 ? $"{yeni} yeni tebligat UETS listesinde göründü. " : "UETS listesinde yeni tebligat yok. ") +
+                          (son.Length > 0 ? $"Son eşitleme: {son}." : "Henüz eşitleme yapılmadı: UETS sekmesini açıp giriş yapın, sonra \"Şimdi eşitle\"ye basın.");
+    }
+
+    void YeniGordu(bool tumu)
+    {
+        if (tumu) Db.Execute("UPDATE uets_liste SET durum='Görüldü' WHERE hesap_tipi=? AND durum='Yeni'", _tip);
+        else if (_tN.Current is { } r && r.S("durum") == "Yeni") Db.Execute("UPDATE uets_liste SET durum='Görüldü' WHERE id=?", r.L("id"));
+        else { Ui.Info(this, "Önce 'Yeni' durumundaki bir satırı seçin."); return; }
+        Refresh();
+        Ctx.RefreshChrome?.Invoke();
     }
 
     void OpenPdf(Row? r)
@@ -328,7 +357,7 @@ public class UetsBrowser : Grid
         lbl.VerticalAlignment = VerticalAlignment.Center;
         var bar = new DockPanel { Margin = new Thickness(0, 8, 0, 6) };
         var nav = Ui.HRow(Ui.Btn("◀", "", () => { if (_ready && _view.CanGoBack) _view.GoBack(); }),
-                          Ui.Btn("⟳", "", () => { if (_ready) _view.Reload(); }), Ui.Btn("Tebligatlarım", "", GoList));
+                          Ui.Btn("⟳", "", () => { if (_ready) _view.Reload(); }), Ui.Btn("Tebligatlarım", "", GoList), Ui.Btn("🔄 Şimdi eşitle", "Listeyi yalnızca okur; yeni görünenleri kaydeder, hiçbir tebligata tıklamaz", () => Esitle(true)));
         DockPanel.SetDock(nav, Dock.Left);
         var sag = Ui.HRow(lbl, _combo, Ui.Btn("Sayfa Yapısını Kaydet (Tanı)", "", DumpStructure));
         DockPanel.SetDock(sag, Dock.Right);
@@ -423,12 +452,55 @@ public class UetsBrowser : Grid
         }
         // Sayfa SPA: liste çizilene kadar kısa bekle, sonra toplam tebligat adedini oku
         await Task.Delay(5000);
+        if (await Esitle(false)) return;   // liste satırları okunduysa adet karşılaştırmasına gerek yok (çift bildirim olmasın)
         try
         {
             var res = await _view.CoreWebView2.ExecuteScriptAsync(AdetJs);
             Adet(int.TryParse(res, out var n) ? n : -1);
         }
         catch (Exception e) { _status.Text = "Adet okunamadı: " + e.Message; }
+    }
+
+    /// <summary>Açık sayfadaki liste satırlarını OKUR (tıklama yok) ve uets_liste ile eşitler. Satır okunabildiyse true döner.</summary>
+    async Task<bool> Esitle(bool manuel)
+    {
+        if (!_ready) { if (manuel) _status.Text = "Tarayıcı henüz hazır değil."; return false; }
+        try
+        {
+            if ((_view.Source?.ToString() ?? "").ToLowerInvariant().Contains("login"))
+            {
+                if (manuel) _status.Text = "Oturum açık değil: önce UETS'e giriş yapıp 'Tebligatlarım' listesini açın.";
+                return false;
+            }
+            var json = await _view.CoreWebView2.ExecuteScriptAsync(UetsEsitleme.SatirlarJs);
+            var ham = System.Text.Json.JsonSerializer.Deserialize<string>(json) ?? "[]";
+            var satirlar = UetsEsitleme.Ayristir(System.Text.Json.JsonSerializer.Deserialize<List<string>>(ham) ?? new());
+            if (satirlar.Count == 0)
+            {
+                if (manuel) _status.Text = "Bu sayfada tebligat satırı bulunamadı. 'Tebligatlarım' listesini açıp tekrar deneyin (gerekirse 'Sayfa Yapısını Kaydet (Tanı)' ile bana gönderin).";
+                return false;
+            }
+            var (yeni, toplam, ilk, yeniler) = UetsEsitleme.Kaydet(Db, _tip, satirlar);
+            var zaman = DateTime.Now.ToString("dd.MM.yyyy HH:mm");
+            Cfg.Set("uets_son_esitleme", zaman);
+            _status.Text = ilk
+                ? $"{zaman}: ilk eşitleme yapıldı, listedeki {toplam} tebligat başlangıç olarak kaydedildi (bundan sonra gelenler 'yeni' sayılır)."
+                : yeni > 0 ? $"{zaman}: {yeni} yeni tebligat bulundu! (listede {toplam})" : $"{zaman}: eşitlendi, yeni tebligat yok (listede {toplam}).";
+            if (yeni > 0)
+            {
+                var ozet = string.Join("\n", yeniler.Take(5).Select(x => $"• {Utils.FmtDate(x.Tarih)} {x.Kurum} {x.Esas}".Trim()));
+                var msg = $"📬 UETS'te {yeni} yeni tebligat göründü (henüz açılmadı/indirilmedi):\n{ozet}";
+                var st = Db.GetSettings();
+                Ui.RunAsyncVoid(() => Notify.SendPersonal(st, msg), null, m => _status.Text += $" (Telegram gönderilemedi: {m})");
+            }
+            _onImported();
+            return true;
+        }
+        catch (Exception e)
+        {
+            if (manuel) _status.Text = "Eşitleme yapılamadı: " + e.Message;
+            return false;
+        }
     }
 
     void Adet(int toplam)

@@ -31,6 +31,18 @@ CREATE TABLE IF NOT EXISTS genel_tebligatlar (
     ayrisan_json TEXT DEFAULT '',
     olusturma TEXT DEFAULT (datetime('now','localtime'))
 );
+CREATE TABLE IF NOT EXISTS uets_liste (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    anahtar TEXT UNIQUE NOT NULL,
+    hesap_tipi TEXT DEFAULT 'Sahsi',
+    tarih TEXT DEFAULT '',
+    kurum TEXT DEFAULT '',
+    konu TEXT DEFAULT '',
+    esas_no TEXT DEFAULT '',
+    satir TEXT DEFAULT '',
+    durum TEXT DEFAULT 'Yeni',
+    ilk_gorulme TEXT DEFAULT (datetime('now','localtime'))
+);
 CREATE TABLE IF NOT EXISTS davalar (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     mahkeme_adi TEXT DEFAULT '',
@@ -503,7 +515,7 @@ public class Db
     }
 
     // --- çöp kutusu: silinen kayıt (ve bağlı alt kayıtları) 60 gün saklanır, geri alınabilir
-    static readonly HashSet<string> CopHaric = new() { "audit_log", "bildirim_log", "ayarlar", "cop_kutusu" };
+    static readonly HashSet<string> CopHaric = new() { "audit_log", "bildirim_log", "ayarlar", "cop_kutusu", "uets_liste" };
     static readonly Dictionary<string, (string Tablo, string Fk)[]> AltKayit = new()
     {
         ["muvekkiller"] = new[] { ("vekaletnameler", "muvekkil_id"), ("finans_tahsilat", "muvekkil_id") },
