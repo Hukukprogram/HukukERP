@@ -411,6 +411,7 @@ public class Db
         KolonEkle("davalar", "saklama_bitis", "TEXT DEFAULT ''");
         KolonEkle("davalar", "kapanis_notu", "TEXT DEFAULT ''");
         KolonEkle("muvekkiller", "kvkk_tarih", "TEXT DEFAULT ''");
+        KolonEkle("muvekkiller", "notlar", "TEXT DEFAULT ''");
         // Şema sürümü: ileride değişiklik gerekirse buradan geçiş adımları sürüme göre eklenir.
         if (ScalarL("PRAGMA user_version") < SemaSurumu) Execute($"PRAGMA user_version = {SemaSurumu}");
     }
