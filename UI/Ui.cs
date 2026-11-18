@@ -125,7 +125,7 @@ public static class Ui
         return t;
     }
 
-    public static TextBlock H1(string text) => Text(text, 22, true);
+    public static TextBlock H1(string text) => Text(text, 24, true);
     public static TextBlock H2(string text) => Text(text, 15, true);
     public static TextBlock Muted(string text, bool wrap = true) => Text(text, 13, false, "muted", wrap);
 
@@ -281,8 +281,8 @@ public class Card : Border
         SetResourceReference(BackgroundProperty, "surface");
         SetResourceReference(BorderBrushProperty, "border");
         BorderThickness = new Thickness(1);
-        CornerRadius = new CornerRadius(14);
-        Padding = new Thickness(16, 14, 16, 14);
+        CornerRadius = new CornerRadius(16);
+        Padding = new Thickness(18, 16, 18, 16);
         Child = Lay;
     }
 
