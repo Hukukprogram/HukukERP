@@ -80,25 +80,27 @@ static class TrTatil
 class TbBtn : Border
 {
     readonly Action _click;
+    readonly TextBlock _t;
+    bool _on;
 
     public TbBtn(string glyph, string label, Action click)
     {
         _click = click;
-        Width = 64; Height = 56; Background = Brushes.Transparent; Cursor = Cursors.Hand;
-        var sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        var g = new TextBlock { Text = glyph, FontSize = 20, HorizontalAlignment = HorizontalAlignment.Center };
-        g.SetResourceReference(TextBlock.ForegroundProperty, "text");
-        var t = new TextBlock { Text = label, FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center };
-        t.SetResourceReference(TextBlock.ForegroundProperty, "text");
-        sp.Children.Add(g); sp.Children.Add(t);
-        Child = sp;
+        Height = 34; MinWidth = 44; Cursor = Cursors.Hand; CornerRadius = new CornerRadius(17);
+        Padding = new Thickness(14, 0, 14, 0); Background = Brushes.Transparent; Margin = new Thickness(1, 0, 1, 0);
+        _t = new TextBlock { Text = label.Length > 0 ? label : glyph, FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        _t.SetResourceReference(TextBlock.ForegroundProperty, "muted");
+        Child = _t;
         MouseLeftButtonUp += (_, _) => _click();
+        MouseEnter += (_, _) => { if (!_on) SetResourceReference(BackgroundProperty, "surface2"); };
+        MouseLeave += (_, _) => { if (!_on) Background = Brushes.Transparent; };
     }
 
     public void Aktif(bool on)
     {
-        if (on) SetResourceReference(BackgroundProperty, "surface");
-        else { ClearValue(BackgroundProperty); Background = Brushes.Transparent; }
+        _on = on;
+        if (on) { SetResourceReference(BackgroundProperty, "accent"); _t.Foreground = Brushes.White; }
+        else { Background = Brushes.Transparent; _t.SetResourceReference(TextBlock.ForegroundProperty, "muted"); }
     }
 }
 
@@ -118,7 +120,7 @@ public class AjandaPage : BasePage
     string _ara = "";
     readonly HashSet<string> _gizli = new();
     List<AjandaItem> _listItems = new();
-    readonly TextBlock _title = new() { FontFamily = new FontFamily("Segoe UI Light"), FontSize = 36, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+    readonly TextBlock _title = new() { FontWeight = FontWeights.SemiBold, FontSize = 26, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 0, 0) };
     readonly TextBox _araBox = new() { Width = 260, Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 16, 0) };
     readonly ContentControl _body = new();
     readonly Dictionary<Gor, TbBtn> _tb = new();
@@ -133,47 +135,40 @@ public class AjandaPage : BasePage
 
     public AjandaPage(AppCtx ctx) : base(ctx, false)
     {
-        // sağ araç çubuğu
-        var bar = new DockPanel { Width = 64 };
-        var barBorder = new Border { Child = bar };
-        barBorder.SetResourceReference(Border.BackgroundProperty, "sidebar");
-        var ust = new StackPanel();
-        _araBtn = new TbBtn("🔍", "Ara", AraAc);
-        ust.Children.Add(_araBtn);
-        foreach (var (g, glyph, ad) in new[] { (Gor.Gun, "▌", "Gün"), (Gor.Hafta, "▥", "Hafta"), (Gor.Ay, "▤", "Ay"), (Gor.Yil, "▦", "Yıl"), (Gor.Liste, "☰", "Liste") })
+        Root.Margin = new Thickness(22, 18, 22, 18);
+        // üst araç çubuğu: [‹ ›] Başlık ............ [Ara] (Gün|Hafta|Ay|Yıl|Liste) [Bugün] [+ Yeni] [Görevler] [Filtre] [Menü]
+        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 12), MinHeight = 46 };
+        _araBtn = new TbBtn("🔍", "🔍", AraAc);
+        var seg = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var (g, ad) in new[] { (Gor.Gun, "Gün"), (Gor.Hafta, "Hafta"), (Gor.Ay, "Ay"), (Gor.Yil, "Yıl"), (Gor.Liste, "Liste") })
         {
             var gg = g;
-            var b = new TbBtn(glyph, ad, () => { _ara = ""; _araBox.Text = ""; _araBox.Visibility = Visibility.Collapsed; _g = gg; Render(); });
-            _tb[g] = b;
-            ust.Children.Add(b);
+            var tb = new TbBtn("", ad, () => { _ara = ""; _araBox.Text = ""; _araBox.Visibility = Visibility.Collapsed; _g = gg; Render(); });
+            _tb[g] = tb;
+            seg.Children.Add(tb);
         }
-        ust.Children.Add(new TbBtn("📍", "Bugün", () => { _cur = DateTime.Today; Render(); }));
-        DockPanel.SetDock(ust, Dock.Top);
-        bar.Children.Add(ust);
-        var alt = new TbBtn("🖨", "Yazdır", Yazdir);
-        DockPanel.SetDock(alt, Dock.Bottom);
-        bar.Children.Add(alt);
-        DockPanel.SetDock(barBorder, Dock.Right);
-        Root.Children.Add(barBorder);
-
-        // üst başlık
-        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 4), Height = 56 };
-        Button Kare(string t, string tip, Action a)
+        var segKap = new Border { CornerRadius = new CornerRadius(19), Padding = new Thickness(3), Margin = new Thickness(8, 0, 8, 0), BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = seg };
+        segKap.SetResourceReference(Border.BackgroundProperty, "surface");
+        segKap.SetResourceReference(Border.BorderBrushProperty, "border");
+        Button Dgm(string t, string tip, Action a, string kind = "")
         {
-            var bt = Ui.Btn(t, "", a);
-            bt.Width = 54; bt.Height = 40; bt.FontSize = 18; bt.ToolTip = tip; bt.Margin = new Thickness(0, 0, 4, 0);
+            var bt = Ui.Btn(t, kind, a);
+            bt.ToolTip = tip; bt.Margin = new Thickness(4, 0, 0, 0); bt.MinWidth = 40; bt.Height = 36; bt.Padding = new Thickness(12, 0, 12, 0);
             return bt;
         }
-        var sag = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
-        sag.Children.Add(Kare("＋", "Yeni etkinlik", () => Yeni(_g == Gor.Gun ? _cur : DateTime.Today, "")));
-        sag.Children.Add(Kare("☑", "Görevler", () => Ctx.Navigate("kanban", null)));
-        sag.Children.Add(Kare("⏷", "Filtre", FiltreAc));
-        sag.Children.Add(Kare("☰", "Menü", MenuAc));
+        var sag = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        sag.Children.Add(_araBtn);
+        sag.Children.Add(segKap);
+        sag.Children.Add(Dgm("Bugün", "Bugüne git", () => { _cur = DateTime.Today; Render(); }));
+        sag.Children.Add(Dgm("＋ Yeni", "Yeni etkinlik", () => Yeni(_g == Gor.Gun ? _cur : DateTime.Today, ""), "Primary"));
+        sag.Children.Add(Dgm("☑", "Görevler", () => Ctx.Navigate("kanban", null)));
+        sag.Children.Add(Dgm("⏷", "Filtre", FiltreAc));
+        sag.Children.Add(Dgm("⋯", "Menü (yazdır, .ics aktar…)", MenuAc));
         DockPanel.SetDock(sag, Dock.Right);
         head.Children.Add(sag);
-        var nav = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+        var nav = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         var prev = Ui.Btn("‹", "", () => Git(-1)); var next = Ui.Btn("›", "", () => Git(1));
-        foreach (var b in new[] { prev, next }) { b.Width = 28; b.Height = 36; b.FontSize = 18; b.Margin = new Thickness(0, 0, 2, 0); b.Padding = new Thickness(0); }
+        foreach (var b in new[] { prev, next }) { b.Width = 36; b.Height = 36; b.FontSize = 18; b.Margin = new Thickness(0, 0, 4, 0); b.Padding = new Thickness(0); }
         nav.Children.Add(prev); nav.Children.Add(next); nav.Children.Add(_title);
         DockPanel.SetDock(nav, Dock.Left);
         head.Children.Add(nav);
@@ -426,11 +421,15 @@ public class AjandaPage : BasePage
 
     Border Pill(AjandaItem it)
     {
-        var t = new TextBlock { Text = it.Etiket, Foreground = Brushes.White, FontSize = 12, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        var t = new TextBlock { Text = it.Etiket, FontSize = 12, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        t.SetResourceReference(TextBlock.ForegroundProperty, "text");
+        var c = (Color)ColorConverter.ConvertFromString(it.Renk);
+        var yumusak = new SolidColorBrush(Color.FromArgb(0x38, c.R, c.G, c.B));
         var b = new Border
         {
-            Background = Hex(it.Renk), CornerRadius = new CornerRadius(3), MinHeight = 22, Margin = new Thickness(0, 0, 0, 2),
-            Padding = new Thickness(8, 0, 8, 0), Child = t, Cursor = it.Kaynak == "tatil" ? Cursors.Arrow : Cursors.Hand,
+            Background = yumusak, BorderBrush = Hex(it.Renk), BorderThickness = new Thickness(3, 0, 0, 0),
+            CornerRadius = new CornerRadius(6), MinHeight = 22, Margin = new Thickness(4, 0, 4, 3),
+            Padding = new Thickness(7, 2, 6, 2), Child = t, Cursor = it.Kaynak == "tatil" ? Cursors.Arrow : Cursors.Hand,
             ToolTip = it.Etiket + (it.Detay.Length > 0 ? "\n" + it.Detay : ""),
         };
         b.MouseLeftButtonDown += (_, e) => e.Handled = true;
@@ -468,8 +467,8 @@ public class AjandaPage : BasePage
         for (int w = 0; w < weeks; w++) g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 60 });
         for (int i = 0; i < 7; i++)
         {
-            var h = new TextBlock { Text = GunAd[i], FontSize = 16, Margin = new Thickness(4, 2, 0, 4) };
-            h.SetResourceReference(TextBlock.ForegroundProperty, "text");
+            var h = new TextBlock { Text = GunAd[i].ToUpper(Tr), FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(10, 2, 0, 6) };
+            h.SetResourceReference(TextBlock.ForegroundProperty, i >= 5 ? "accent" : "muted");
             Grid.SetColumn(h, i + 1);
             g.Children.Add(h);
         }
@@ -481,7 +480,7 @@ public class AjandaPage : BasePage
             {
                 var wn = new TextBlock
                 {
-                    Text = ISOWeek.GetWeekOfYear(d).ToString(), FontFamily = new FontFamily("Segoe UI Light"), FontSize = 30,
+                    Text = ISOWeek.GetWeekOfYear(d).ToString(), FontSize = 18, FontWeight = FontWeights.SemiBold,
                     HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                     LayoutTransform = new RotateTransform(-90),
                 };
@@ -498,9 +497,9 @@ public class AjandaPage : BasePage
 
     Border Hucre(DateTime d, List<AjandaItem> list, bool buAy)
     {
-        var b = new Border { BorderThickness = new Thickness(0.5), ClipToBounds = true };
+        var b = new Border { BorderThickness = new Thickness(1), ClipToBounds = true, CornerRadius = new CornerRadius(12), Margin = new Thickness(2), Opacity = buAy ? 1.0 : 0.55 };
         bool secili = _secGun == d.Date;
-        b.SetResourceReference(Border.BackgroundProperty, secili ? "sel" : "surface2");
+        b.SetResourceReference(Border.BackgroundProperty, secili ? "sel" : "surface");
         b.SetResourceReference(Border.BorderBrushProperty, secili ? "accent" : "border");
         if (secili) _secHucre = b;
         var grid = new Grid();
@@ -511,14 +510,15 @@ public class AjandaPage : BasePage
         {
             num = new Border
             {
-                Width = 26, Height = 26, CornerRadius = new CornerRadius(13), Background = Hex(Kirmizi),
-                HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(3, 3, 0, 1),
-                Child = new TextBlock { Text = d.Day.ToString(), Foreground = Brushes.White, FontSize = 15, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                Width = 26, Height = 26, CornerRadius = new CornerRadius(13),
+                HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(6, 5, 0, 3),
+                Child = new TextBlock { Text = d.Day.ToString(), Foreground = Brushes.White, FontSize = 14, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             };
+            ((Border)num).SetResourceReference(Border.BackgroundProperty, "accent");
         }
         else
         {
-            var t = new TextBlock { Text = d.Day.ToString(), FontSize = 15, Margin = new Thickness(6, 4, 0, 2) };
+            var t = new TextBlock { Text = d.Day.ToString(), FontSize = 14, Margin = new Thickness(10, 6, 0, 3) };
             t.SetResourceReference(TextBlock.ForegroundProperty, buAy ? "text" : "muted");
             num = t;
         }
@@ -529,7 +529,7 @@ public class AjandaPage : BasePage
         void Doldur()
         {
             sp.Children.Clear();
-            int cap = Math.Max(1, (int)((b.ActualHeight - 34) / 26));
+            int cap = Math.Max(1, (int)((b.ActualHeight - 38) / 27));
             int goster = list.Count > cap ? Math.Max(0, cap - 1) : list.Count;
             for (int i = 0; i < goster; i++) sp.Children.Add(Pill(list[i]));
             if (list.Count > goster)
@@ -548,14 +548,14 @@ public class AjandaPage : BasePage
             {
                 _secGun = null;
                 _secHucre = null;
-                b.SetResourceReference(Border.BackgroundProperty, "surface2");
+                b.SetResourceReference(Border.BackgroundProperty, "surface");
                 b.SetResourceReference(Border.BorderBrushProperty, "border");
                 Yeni(d, "");
                 return;
             }
             if (_secHucre != null)
             {
-                _secHucre.SetResourceReference(Border.BackgroundProperty, "surface2");
+                _secHucre.SetResourceReference(Border.BackgroundProperty, "surface");
                 _secHucre.SetResourceReference(Border.BorderBrushProperty, "border");
             }
             _secGun = d.Date;
