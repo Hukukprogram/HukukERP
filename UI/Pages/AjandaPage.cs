@@ -96,6 +96,8 @@ class TbBtn : Border
         MouseLeave += (_, _) => { if (!_on) Background = Brushes.Transparent; };
     }
 
+    public void Metin(string t) => _t.Text = t;
+
     public void Aktif(bool on)
     {
         _on = on;
