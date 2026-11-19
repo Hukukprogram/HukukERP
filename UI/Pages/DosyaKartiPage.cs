@@ -102,6 +102,7 @@ public class DosyaKartiPage : BasePage
         var sayfa = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
         if (gomulu)
         {
+            hg.Children.Remove(eylem);   // başlık kartı gömülü modda kullanılmaz; aynı öğe iki yerde olamaz
             eylem.HorizontalAlignment = HorizontalAlignment.Left; eylem.MaxWidth = double.PositiveInfinity; eylem.Margin = new Thickness(0, 8, 0, 6);
             foreach (var e in new UIElement[] { eylem, araclar, kpi, tlBaslik, chips, _tl }) sayfa.Children.Add(e);
         }
