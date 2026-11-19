@@ -25,7 +25,7 @@ public class IsListesiPage : BasePage
         _filtre.SelectionChanged += (_, _) => { if (!_busy) Refresh(); };
         _ara.TextChanged += (_, _) => { if (!_busy) Refresh(); };
 
-        Top(Ui.HRow(Ui.Btn("＋ Yeni İş", "Primary", Ekle), Ui.Btn("⚖ Tebligat Süresi Ekle (Katalog)", "Primary", KatalogEkle), Ui.Btn("Düzenle", "", Duzenle), Ui.Btn("🔍 Hesap Dökümü", "", Dokum),
+        Top(Ui.HRow(Ui.Btn("＋ Yeni İş (tebligat süresi dahil)", "Primary", Ekle), Ui.Btn("Düzenle", "", Duzenle), Ui.Btn("🔍 Hesap Dökümü", "", Dokum),
                     Ui.Btn("✔ Tamamlandı", "Ok", () => DurumYap("Tamamlandı")), Ui.Btn("↺ Yeniden Aç", "", () => DurumYap("Açık")),
                     Ui.Btn("Sil", "Danger", Sil)));
         Top(Ui.HRow(Ui.Muted("Göster:", false), _filtre, Ui.Muted("Ara:", false), _ara,
@@ -72,6 +72,10 @@ public class IsListesiPage : BasePage
     /// <summary>Süreli iş formu. values içindeki tebligat_id sonuca aynen taşınır.</summary>
     public static Dictionary<string, object?>? Sor(DependencyObject? owner, Db db, IDictionary<string, object?>? values = null)
     {
+        // UETS tebligatından gelen kayıtlar eski formla; diğer tüm yeni/düzenle işlemleri tek modern ekranla
+        bool tebligatli = values != null && values.TryGetValue("tebligat_id", out var tid) && tid != null && Convert.ToString(tid) is { Length: > 0 } ts && ts != "0";
+        if (!tebligatli && owner != null) return IsDialog.Goster(owner, db, values);
+
         var dv = new List<(object? Value, string Label)> { (0L, "— Bağlı dava yok —") };
         foreach (var d in db.Query("SELECT d.id, d.mahkeme_adi, d.esas_no, m.ad_soyad FROM davalar d LEFT JOIN muvekkiller m ON m.id=d.muvekkil_id ORDER BY d.id DESC"))
             dv.Add((d.L("id"), $"{d.S("mahkeme_adi")} {d.S("esas_no")} — {d.S("ad_soyad")}".Trim(' ', '—', ' ')));
@@ -105,24 +109,8 @@ public class IsListesiPage : BasePage
 
     /// <summary>Katalogdan süre seçtirir, son tarihi hesaplar ve iş formu için hazır değerleri döndürür (iptalde null).
     /// tebligat verilirse başlangıç tarihi, metin eşleşmesi ve bağlantı (tebligat_id) ondan gelir.</summary>
-    public static Dictionary<string, object?>? KatalogHazirla(DependencyObject? owner, Db db, Row? tebligat)
+    public static Dictionary<string, object?>? KatalogHazirla(DependencyObject? owner, Db db, Row? tebligat, bool katalogZorunlu = false)
     {
-        // Tebligata bağlı olmayan çağrıda modern elle giriş penceresi; "Katalogdan seç" denirse eski pencere açılır
-        if (tebligat == null)
-        {
-            var el = SureDialog.Goster(owner!, out var katalog);
-            if (!katalog)
-            {
-                if (el == null) return null;
-                return new Dictionary<string, object?>
-                {
-                    ["baslangic"] = Utils.Iso(el.Teblig),
-                    ["son_tarih"] = Utils.Iso(el.Son),
-                    ["notlar"] = el.Aciklama + "\nSüre elle girildi; adli tatil uzatması uygulanmaz, süreyi kendiniz de kontrol edin.",
-                };
-            }
-        }
-
         var liste = IsSureleri.Liste(Path.GetDirectoryName(db.Path));
         var opts = new List<(object? Value, string Label)> { (-1L, "— Katalogda yok: elle gireceğim —") };
         for (int i = 0; i < liste.Count; i++) opts.Add(((long)i, liste[i].Ad));
@@ -189,15 +177,7 @@ public class IsListesiPage : BasePage
         return v;
     }
 
-    void KatalogEkle()
-    {
-        var h = KatalogHazirla(this, Db, null);
-        if (h == null) return;
-        var v = Sor(this, Db, h);
-        if (v == null) return;
-        Db.Insert("sureler", v);
-        Refresh();
-    }
+    void KatalogEkle() => Ekle();
 
     void Duzenle()
     {

@@ -519,10 +519,7 @@ public class DosyaKartiPage : BasePage
     {
         var id = Secili;
         if (id == 0) { Ui.Info(this, "Önce bir dava seçin."); return; }
-        var h = IsListesiPage.KatalogHazirla(this, Db, null);
-        if (h == null) return;
-        h["dava_id"] = id;
-        var v = IsListesiPage.Sor(this, Db, h);
+        var v = IsListesiPage.Sor(this, Db, new Dictionary<string, object?> { ["dava_id"] = id });
         if (v == null) return;
         Db.Insert("sureler", v);
         Yukle();
