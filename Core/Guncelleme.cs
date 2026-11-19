@@ -15,6 +15,7 @@ public static class Guncelleme
     static bool _soruldu;
     static UpdateManager? _mgr;
     static UpdateInfo? _hazir;
+    static bool _uygulandi;
 
     /// <summary>İndirilmiş, kurulmayı bekleyen sürüm (yoksa null).</summary>
     public static string? HazirSurum => _hazir?.TargetFullRelease.Version.ToString();
@@ -23,7 +24,19 @@ public static class Guncelleme
     /// <summary>Programı kapatıp güncellemeyi kurar ve yeniden başlatır.</summary>
     public static void Uygula()
     {
-        if (_mgr != null && _hazir != null) _mgr.ApplyUpdatesAndRestart(_hazir);
+        if (_mgr == null || _hazir == null) return;
+        _uygulandi = true;
+        try
+        {
+            // Update.exe program kapanınca güncellemeyi kurar ve programı yeniden başlatır
+            _mgr.WaitExitThenApplyUpdates(_hazir, false, true);
+        }
+        catch (Exception) { _uygulandi = false; return; }
+        Application.Current.Shutdown();
+        // kapanış bir nedenle takılırsa (arka plan iş parçacığı vb.) 4 sn sonra zorla kapat
+        var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+        t.Tick += (_, _) => Environment.Exit(0);
+        t.Start();
     }
 
     static string Kaynak(Config cfg)
@@ -60,7 +73,8 @@ public static class Guncelleme
             _soruldu = true;
             await _mgr.DownloadUpdatesAsync(info); // arka planda indir
             _hazir = info;
-            _mgr.WaitExitThenApplyUpdates(info, false, false); // banner'a basılmazsa program kapanınca kurulur
+            // banner'a basılmazsa program kapanınca kurulur (yeniden başlatma isteği Uygula'da ayrıca verilir)
+            Application.Current.Exit += (_, _) => { if (!_uygulandi) { try { _mgr.WaitExitThenApplyUpdates(info, false, false); } catch (Exception) { } } };
             Degisti?.Invoke();
         }
         catch (Exception) { /* çevrimdışı/erişilemez: sessizce geç, bir sonraki açılışta tekrar dener */ }

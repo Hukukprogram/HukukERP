@@ -75,7 +75,7 @@ public class IsDialog : Window
         for (int y = Math.Min(DateTime.Today.Year, bas.Year) - 2; y <= DateTime.Today.Year + 2; y++) _y.Items.Add(y);
         _g.SelectedItem = bas.Day; _a.SelectedIndex = bas.Month - 1; _y.SelectedItem = bas.Year;
         _b.Items.Add("Gün"); _b.Items.Add("Hafta"); _b.Items.Add("Ay"); _b.SelectedIndex = 0;
-        _e.IsChecked = !duzenle;
+        _e.IsChecked = false;
         var sn = Utils.ParseDate(S("son_tarih"));
         _son.Text = sn == null ? "" : sn.Value.ToString("dd.MM.yyyy");
         _ac.Text = duzenle ? "" : "Süreyi yazınca son gün otomatik hesaplanır; isterseniz son günü doğrudan yazabilirsiniz.";
@@ -86,11 +86,9 @@ public class IsDialog : Window
 
         var kok = new StackPanel { Margin = new Thickness(24, 20, 24, 8) };
         var baslikSatir = new DockPanel();
-        var kat = Ui.Btn("📚 Katalogdan doldur", "", KatalogdanDoldur);
-        DockPanel.SetDock(kat, Dock.Right);
-        baslikSatir.Children.Add(kat); baslikSatir.Children.Add(Ui.Text(duzenle ? "Süreli İşi Düzenle" : "Yeni Süreli İş", 18, true));
+        baslikSatir.Children.Add(Ui.Text(duzenle ? "Süreli İşi Düzenle" : "Yeni Süreli İş", 18, true));
         kok.Children.Add(baslikSatir);
-        var alt0 = Ui.Muted("Tebligat süresi dahil tüm süreli işler buradan girilir.", false); alt0.Margin = new Thickness(0, 2, 0, 4); kok.Children.Add(alt0);
+        var alt0 = Ui.Muted("Tebligat süresi dahil tüm süreli işler buradan girilir. Süreyi elle yazarsınız.", false); alt0.Margin = new Thickness(0, 2, 0, 4); kok.Children.Add(alt0);
 
         kok.Children.Add(Et("İş / Süre Başlığı *")); kok.Children.Add(_baslik);
 
@@ -173,32 +171,6 @@ public class IsDialog : Window
                    (son != ham ? " • tatile denk geldiği için ilk iş gününe kaydı" : "") +
                    ". Adli tatil uzatması uygulanmaz; süreyi kendiniz de kontrol edin.";
         _baslangicIso = Utils.Iso(teblig);
-    }
-
-    void KatalogdanDoldur()
-    {
-        var h = IsListesiPage.KatalogHazirla(this, _db, null, katalogZorunlu: true);
-        if (h == null) return;
-        _yukleniyor = true;
-        try
-        {
-            string S(string k) => h.TryGetValue(k, out var o) ? Convert.ToString(o) ?? "" : "";
-            if (S("baslik").Length > 0 && _baslik.Text.Trim().Length == 0) _baslik.Text = S("baslik");
-            var t = S("sure_turu"); if (t.Length > 0) { var i = Array.IndexOf(Turler, t); if (i >= 0) _tur.SelectedIndex = i; }
-            if (S("dayanak").Length > 0) _dayanak.Text = S("dayanak");
-            var b = Utils.ParseDate(S("baslangic"));
-            if (b != null)
-            {
-                _g.SelectedItem = b.Value.Day; _a.SelectedIndex = b.Value.Month - 1;
-                if (!_y.Items.Contains(b.Value.Year)) _y.Items.Add(b.Value.Year);
-                _y.SelectedItem = b.Value.Year; _e.IsChecked = false; _baslangicIso = Utils.Iso(b.Value);
-            }
-            var s = Utils.ParseDate(S("son_tarih")); if (s != null) _son.Text = s.Value.ToString("dd.MM.yyyy");
-            if (S("notlar").Length > 0) _notlar.Text = S("notlar");
-            _n.Text = "";
-            _ac.Text = "Katalogdan dolduruldu; kontrol edin.";
-        }
-        finally { _yukleniyor = false; }
     }
 
     void Onayla()
