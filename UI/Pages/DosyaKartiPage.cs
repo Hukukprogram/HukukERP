@@ -66,17 +66,21 @@ public class DosyaKartiPage : BasePage
         var sec = Ui.WRow(Ui.Muted("Müvekkil:", false), _mcombo, Ui.Muted("Dava:", false), _combo);
         var seritScroll = new ScrollViewer { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = _serit, Margin = new Thickness(0, 0, 0, 10) };
 
-        // ---- başlık kartı
-        var info = new StackPanel(); info.Children.Add(_dTitle); info.Children.Add(_dSub); info.Children.Add(_dEtiket);
+        // ---- başlık kartı (yalnızca tek başına sayfa olarak kullanılırken; gömülü modda hiç oluşturulmaz)
         var eylem = Ui.WRow(Ui.Btn("⚖ Duruşma Notu", "Primary", DurusmaNotu), Ui.Btn("＋ Süreli İş", "Ok", SureEkle), Ui.Btn("⋯ Git", "", GitMenu));
-        eylem.HorizontalAlignment = HorizontalAlignment.Right; eylem.MaxWidth = 420;
-        var hg = new Grid();
-        hg.ColumnDefinitions.Add(new ColumnDefinition()); hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(eylem, 1);
-        hg.Children.Add(info); hg.Children.Add(eylem);
-        var hdr = new Border { CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Padding = new Thickness(18, 14, 18, 14), Margin = new Thickness(0, 0, 0, 10), Child = hg };
-        hdr.SetResourceReference(Border.BackgroundProperty, "surface");
-        hdr.SetResourceReference(Border.BorderBrushProperty, "border");
+        Border? hdr = null;
+        if (!gomulu)
+        {
+            var info = new StackPanel(); info.Children.Add(_dTitle); info.Children.Add(_dSub); info.Children.Add(_dEtiket);
+            eylem.HorizontalAlignment = HorizontalAlignment.Right; eylem.MaxWidth = 420;
+            var hg = new Grid();
+            hg.ColumnDefinitions.Add(new ColumnDefinition()); hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(eylem, 1);
+            hg.Children.Add(info); hg.Children.Add(eylem);
+            hdr = new Border { CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Padding = new Thickness(18, 14, 18, 14), Margin = new Thickness(0, 0, 0, 10), Child = hg };
+            hdr.SetResourceReference(Border.BackgroundProperty, "surface");
+            hdr.SetResourceReference(Border.BorderBrushProperty, "border");
+        }
 
         // ---- araç şeridi
         _sayacBtn = Ui.Btn("▶ Sayaç Başlat", "", SayacDegistir);
@@ -102,12 +106,11 @@ public class DosyaKartiPage : BasePage
         var sayfa = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
         if (gomulu)
         {
-            hg.Children.Remove(eylem);   // başlık kartı gömülü modda kullanılmaz; aynı öğe iki yerde olamaz
             eylem.HorizontalAlignment = HorizontalAlignment.Left; eylem.MaxWidth = double.PositiveInfinity; eylem.Margin = new Thickness(0, 8, 0, 6);
             foreach (var e in new UIElement[] { eylem, araclar, kpi, tlBaslik, chips, _tl }) sayfa.Children.Add(e);
         }
         else
-            foreach (var e in new UIElement[] { sec, seritScroll, hdr, _step, araclar, kpi, tlBaslik, chips, _tl }) sayfa.Children.Add(e);
+            foreach (var e in new UIElement[] { sec, seritScroll, hdr!, _step, araclar, kpi, tlBaslik, chips, _tl }) sayfa.Children.Add(e);
         var kaydir = new ScrollViewer { Content = sayfa, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Fill(kaydir);
 
