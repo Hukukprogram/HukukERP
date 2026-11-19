@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using HukukErp.Core;
@@ -31,7 +32,6 @@ public class IsDialog : Window
     readonly TextBox _notlar = new() { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 70, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalContentAlignment = VerticalAlignment.Top, Padding = new Thickness(6) };
     Dictionary<string, object?>? _sonuc;
     bool _yukleniyor = true;
-    bool _sureKullanildi;
     string _baslangicIso = "";
 
     IsDialog(DependencyObject owner, Db db, IDictionary<string, object?>? values)
@@ -159,9 +159,8 @@ public class IsDialog : Window
     void Hesapla()
     {
         if (_yukleniyor) return;
-        if (!int.TryParse(_n.Text.Trim(), out var n) || n <= 0) { _sureKullanildi = false; return; }
+        if (!int.TryParse(_n.Text.Trim(), out var n) || n <= 0) return;
         var bas = TebligTarihi(); if (bas == null) return;
-        _sureKullanildi = true;
         var eteb = _e.IsChecked == true;
         var teblig = eteb ? bas.Value.AddDays(IsSureleri.ETebligatGunu) : bas.Value;
         var birim = _b.SelectedIndex == 1 ? "hafta" : _b.SelectedIndex == 2 ? "ay" : "gun";
