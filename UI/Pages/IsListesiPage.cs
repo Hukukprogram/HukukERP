@@ -92,6 +92,44 @@ public class IsListesiPage : BasePage
         return r;
     }
 
+    /// <summary>Tebligat süresini elle girer: gün sayısı (tebliğden itibaren) ya da doğrudan son gün. Katalog/otomatik tahmin kullanılmaz.</summary>
+    static Dictionary<string, object?>? ElleSure(DependencyObject? owner, Row t)
+    {
+        var f = new List<Field>
+        {
+            new("baslangic", "UETS'e ulaşma / tebliğ tarihi", "date", def: t.S("teblig_tarihi")),
+            new("etebligat", $"UETS e-tebligatı (tebliğ tarihi = ulaşma + {IsSureleri.ETebligatGunu} gün)", "check", def: 1L),
+            new("gun", "Süre (gün) – tebliğden itibaren", "int", def: 0L),
+            new("son", "veya Son gün (elle) – doluysa gün sayısı yok sayılır", "date", def: ""),
+        };
+        var a = FormDialog.Ask(owner, "Tebligat Süresini Elle Gir", f);
+        if (a == null) return null;
+        var v = new Dictionary<string, object?>
+        {
+            ["tebligat_id"] = t.L("id"),
+            ["baslik"] = $"{t.S("gonderen_kurum")} {t.S("esas_no")}".Trim(),
+            ["dayanak"] = $"UETS tebligatı ({Utils.FmtDate(t.S("teblig_tarihi"))}) – {t.S("konu")}".Trim(' ', '–'),
+        };
+        if (t.L("dava_id") > 0) v["dava_id"] = t.L("dava_id");
+        var bas = Utils.ParseDate(Convert.ToString(a["baslangic"]));
+        var elle = Utils.ParseDate(Convert.ToString(a["son"]));
+        int gun = (int)Convert.ToInt64(a["gun"] ?? 0L);
+        if (elle != null)
+        {
+            v["son_tarih"] = Utils.Iso(elle.Value);
+            if (bas != null) v["baslangic"] = Utils.Iso(bas.Value);
+            v["notlar"] = "Son gün elle girildi.";
+            return v;
+        }
+        if (bas == null || gun <= 0) { Ui.Warn(owner, "Tebliğ tarihi ile süre (gün) girin ya da son günü doğrudan yazın."); return null; }
+        var teblig = Convert.ToInt64(a["etebligat"] ?? 0L) == 1 ? bas.Value.AddDays(IsSureleri.ETebligatGunu) : bas.Value;
+        var son = IsSureleri.IsGunuyaKaydir(teblig.AddDays(gun));
+        v["baslangic"] = Utils.Iso(teblig);
+        v["son_tarih"] = Utils.Iso(son);
+        v["notlar"] = $"Tebliğ: {teblig:dd.MM.yyyy} • Süre elle girildi: {gun} gün. Adli tatil uzatması uygulanmaz; süreyi kendiniz de kontrol edin.";
+        return v;
+    }
+
     public void YeniIs() => Ekle();
     public void KatalogtanSure() => KatalogEkle();
 
@@ -107,6 +145,9 @@ public class IsListesiPage : BasePage
     /// tebligat verilirse başlangıç tarihi, metin eşleşmesi ve bağlantı (tebligat_id) ondan gelir.</summary>
     public static Dictionary<string, object?>? KatalogHazirla(DependencyObject? owner, Db db, Row? tebligat)
     {
+        // UETS tebligatından gelen süre: otomatik tahmin yok, süreyi siz yazarsınız
+        if (tebligat != null) return ElleSure(owner, tebligat);
+
         var liste = IsSureleri.Liste(Path.GetDirectoryName(db.Path));
         var opts = new List<(object? Value, string Label)> { (-1L, "— Katalogda yok: elle gireceğim —") };
         for (int i = 0; i < liste.Count; i++) opts.Add(((long)i, liste[i].Ad));
