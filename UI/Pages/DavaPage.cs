@@ -26,7 +26,7 @@ public class DavaPage : BasePage
     static readonly System.Globalization.CultureInfo Tr = new("tr-TR");
 
     // liste
-    readonly TextBox _ara = new() { Width = 240, ToolTip = "Mahkeme, esas no, müvekkil, karşı taraf veya dava türü ile ara" };
+    readonly TextBox _ara = new() { Width = 300, ToolTip = "Mahkeme, esas no, müvekkil, karşı taraf veya dava türü ile ara" };
     readonly SearchPick _mc = new() { MinWidth = 210, Placeholder = "Tüm müvekkiller" };
     readonly ComboBox _sira = new() { MinWidth = 220 };
     readonly Dictionary<Fl, TbBtn> _chip = new();
@@ -44,7 +44,7 @@ public class DavaPage : BasePage
     // detay
     readonly ContentControl _sag = new();
     readonly TextBlock _dTitle = Ui.Text("", 20, true, "text", true), _dSub = Ui.Muted("");
-    readonly UniformGrid _step = new() { Columns = 8, Margin = new Thickness(0, 0, 0, 10) };
+    readonly UniformGrid _step = new() { Columns = 8, Margin = new Thickness(0, 0, 0, 8), ToolTip = "Dava aşaması — bir aşamaya tıklayarak güncelleyin" };
     readonly TextBlock _dkDur = Ui.Text("–", 16, true), _dkSure = Ui.Text("–", 16, true), _dkMasraf = Ui.Text("–", 16, true), _dkTur = Ui.Text("–", 16, true);
     readonly DataTable _tTl = new(("Aşama", "asama", null), ("Tarih", "tarih", Fmt.Date), ("Dayanak", "dayanak", null));
     readonly DataTable _tSu = new(("Son Gün", "son_tarih", Fmt.Date), ("Süre / İş", "baslik", null), ("Dayanak", "dayanak", null), ("Durum", "durum", null));
@@ -67,13 +67,13 @@ public class DavaPage : BasePage
     public DavaPage(AppCtx ctx) : base(ctx)
     {
         _kart = new DosyaKartiPage(ctx, true);
-        Top(Ui.PageHeader("Dosyalar", "Soldan dosya seçin: sağda Dosya Kartı (zaman çizelgesi, evrak, mali kayıtlar), aşama, süreler, masraflar ve notlar açılır"));
+        Top(Ui.PageHeader("Dosyalar", "Soldan dosya seçin (↑ ↓ ile gezin, Ctrl+F ile ara); sağda Dosya Kartı, aşama, süreler, masraflar ve notlar açılır"));
 
         // özet kartları
         var kpi = new UniformGrid { Columns = 4, Margin = new Thickness(0, 0, -10, 12) };
         kpi.Children.Add(Kart("Derdest dava", _kDerdest)); kpi.Children.Add(Kart("7 gün içinde duruşma", _kDur));
         kpi.Children.Add(Kart("Süresi yaklaşan / geciken", _kSure)); kpi.Children.Add(Kart("Karara çıkan", _kKarar));
-        Top(kpi, 0);
+        // (üstteki özet kartları kaldırıldı: sayılar süzgeç düğmelerinin üzerinde)
 
         // araç çubuğu
         _sira.Items.Clear(); foreach (var s in Siralar) _sira.Items.Add(s);
@@ -108,7 +108,21 @@ public class DavaPage : BasePage
         Fill(Ui.HSplit(left, _sag, 2, 3));
 
         _ara.TextChanged += (_, _) => { if (!_busy) Yukle(); };
-        _ara.KeyDown += (_, e) => { if (e.Key == Key.Escape) { _ara.Text = ""; e.Handled = true; } };
+        _ara.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape) { _ara.Text = ""; e.Handled = true; }
+            else if (e.Key == Key.Down) { Gez(1, true); e.Handled = true; }
+            else if (e.Key == Key.Up) { Gez(-1, true); e.Handled = true; }
+        };
+        _kScroll.PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Down) { Gez(1, false); e.Handled = true; }
+            else if (e.Key == Key.Up) { Gez(-1, false); e.Handled = true; }
+        };
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.F && (Keyboard.Modifiers & ModifierKeys.Control) != 0) { _ara.Focus(); _ara.SelectAll(); e.Handled = true; }
+        };
         _mc.SelectionChanged += (_, _) => { if (!_busy) Yukle(); };
         _sira.SelectionChanged += (_, _) => { if (!_busy) Yukle(); };
         _tSu.MouseDoubleClick += (_, _) => Ctx.Navigate("is_listesi", null);
@@ -165,7 +179,7 @@ public class DavaPage : BasePage
         kpi.Children.Add(Kart("Toplam masraf", _dkMasraf)); kpi.Children.Add(Kart("Dava türü", _dkTur));
         DockPanel.SetDock(kpi, Dock.Top);
 
-        dock.Children.Add(hdr); dock.Children.Add(stepBaslik); dock.Children.Add(_step); dock.Children.Add(kpi);
+        dock.Children.Add(hdr); dock.Children.Add(_step); dock.Children.Add(kpi);
 
         var tabs = _tabs;
         // Dosya Kartı (zaman çizelgesi, evrak, mali kayıtlar): yalnızca bu sekme açıkken yüklenir
@@ -263,6 +277,11 @@ public class DavaPage : BasePage
         _kDur.Text = _rows.Count(r => Acik(r) && DurGelecek(r) && DurK(r) <= 7).ToString();
         _kSure.Text = _rows.Count(r => Acik(r) && r.S("sure_son").Length > 0 && Utils.DaysLeft(r.S("sure_son")) <= 7).ToString();
         _kKarar.Text = _rows.Count(r => !Acik(r)).ToString();
+        _chip[Fl.Derdest].Metin($"Derdest {_kDerdest.Text}");
+        _chip[Fl.Durusma].Metin($"Duruşması 14 gün içinde {_rows.Count(r => Acik(r) && DurGelecek(r) && DurK(r) <= 14)}");
+        _chip[Fl.Sure].Metin($"Süresi 7 gün içinde {_kSure.Text}");
+        _chip[Fl.Karar].Metin($"Karara çıkanlar {_kKarar.Text}");
+        _chip[Fl.Tumu].Metin($"Tümü {_rows.Count}");
         foreach (var kv in _chip) kv.Value.Aktif(kv.Key == _fl);
 
         var list = _rows.AsEnumerable();
@@ -376,6 +395,20 @@ public class DavaPage : BasePage
         cm.Items.Add(new Separator());
         Ekle("Sil…", DelD);
         return cm;
+    }
+
+    void Gez(int yon, bool aramaOdakta)
+    {
+        var l = _kartlar.Children.OfType<Border>().Where(x => x.Tag is long).ToList();
+        if (l.Count == 0) return;
+        int i = _curB == null ? 0 : l.IndexOf(_curB);
+        i = Math.Clamp(i < 0 ? 0 : i + yon, 0, l.Count - 1);
+        var b = l[i];
+        var r = _rows.FirstOrDefault(x => x.L("id") == (long)b.Tag);
+        if (r == null) return;
+        Sec(b, r);
+        b.BringIntoView();
+        if (aramaOdakta) _ara.Focus();
     }
 
     void Vurgula()
