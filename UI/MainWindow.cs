@@ -137,8 +137,6 @@ public class MainWindow : Window
         Ekle("Yeni dava", "dava", "YeniDava");
         Ekle("Yeni icra dosyası", "icra", "Yeni");
         Ekle("Yeni icra görevi (süreli)", "icra_gorev", "Yeni");
-        Ekle("Yeni süreli iş", "is_listesi", "YeniIs");
-        Ekle("Katalogdan tebligat süresi", "is_listesi", "KatalogtanSure");
         Ekle("Yeni görev", "kanban", "YeniGorev");
         Ekle("Tahsilat girişi", "muvekkil", "TahsilatEkle");
         if (hedef != null) { m.PlacementTarget = hedef; m.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom; }
@@ -182,8 +180,7 @@ public class MainWindow : Window
             k.Add(("Git: " + _nav[_keys[i]].Text.Trim(), () => Goto(ix)));
         }
         void Is(string ad, string sayfa, string eylem) => k.Add((ad, () => Navigate(sayfa, eylem)));
-        Is("Yeni süreli iş", "is_listesi", "YeniIs");
-        Is("Katalogdan tebligat süresi ekle", "is_listesi", "KatalogtanSure");
+        Is("Yeni icra görevi", "icra_gorev", "Yeni");
         Is("Yeni dava", "dava", "YeniDava");
         Is("Yeni müvekkil", "muvekkil", "YeniMuvekkil");
         Is("Yeni görev", "kanban", "YeniGorev");
@@ -461,7 +458,8 @@ public class MainWindow : Window
 
         _nav["avukat_uets"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM genel_tebligatlar WHERE hesap_tipi='Sahsi' AND durum=?", Workflows.QAvukat) + UetsEsitleme.YeniSayisi(_db), "info");
         _nav["dava"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM davalar WHERE asama_durum!='Karara Çıktı'"), "ok");
-        _nav["is_listesi"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM sureler WHERE durum='Açık' AND son_tarih<=date('now','+7 day')"), "danger");
+        _nav["is_listesi"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM sureler WHERE tebligat_id>0 AND durum='Açık' AND son_tarih<=date('now','+7 day')"), "danger");
+        _nav["icra_gorev"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM sureler WHERE icra_id>0 AND durum='Açık' AND son_tarih<=date('now','+7 day')"), "danger");
         _nav["kanban"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM gorevler WHERE durum!='Tamamlandı'"), "warn");
     }
 

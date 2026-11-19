@@ -18,14 +18,14 @@ public class IsListesiPage : BasePage
 
     public IsListesiPage(AppCtx ctx) : base(ctx)
     {
-        Top(Ui.PageHeader("İş Listesi", "Son tarihi olan işler • UETS tebligatlarından tek tıkla eklenir • çift tıklayınca düzenlenir"));
+        Top(Ui.PageHeader("İş Listesi", "Yalnızca UETS tebligatlarından gelen süreler • UETS sayfasından \"⏱ İş Listesi\" ile eklenir • çift tıklayınca düzenlenir"));
 
         foreach (var x in new[] { "Açık İşler", "Tamamlananlar", "Tümü" }) _filtre.Items.Add(x);
         _filtre.SelectedIndex = 0;
         _filtre.SelectionChanged += (_, _) => { if (!_busy) Refresh(); };
         _ara.TextChanged += (_, _) => { if (!_busy) Refresh(); };
 
-        Top(Ui.HRow(Ui.Btn("＋ Yeni İş (tebligat süresi dahil)", "Primary", Ekle), Ui.Btn("Düzenle", "", Duzenle), Ui.Btn("🔍 Hesap Dökümü", "", Dokum),
+        Top(Ui.HRow(Ui.Btn("Düzenle", "", Duzenle), Ui.Btn("🔍 Hesap Dökümü", "", Dokum),
                     Ui.Btn("✔ Tamamlandı", "Ok", () => DurumYap("Tamamlandı")), Ui.Btn("↺ Yeniden Aç", "", () => DurumYap("Açık")),
                     Ui.Btn("Sil", "Danger", Sil)));
         Top(Ui.HRow(Ui.Muted("Göster:", false), _filtre, Ui.Muted("Ara:", false), _ara,
@@ -50,7 +50,7 @@ public class IsListesiPage : BasePage
                 "SELECT s.*, TRIM(COALESCE(d.mahkeme_adi,'') || ' ' || COALESCE(d.esas_no,'')) AS dava, " +
                 "CASE WHEN s.tebligat_id>0 THEN TRIM(COALESCE(g.gonderen_kurum,'') || ' ' || COALESCE(g.esas_no,'')) ELSE '' END AS uets " +
                 "FROM sureler s LEFT JOIN davalar d ON d.id=s.dava_id LEFT JOIN genel_tebligatlar g ON g.id=s.tebligat_id " +
-                (f == 0 ? "WHERE s.durum='Açık' " : f == 1 ? "WHERE s.durum='Tamamlandı' " : "") +
+                "WHERE s.tebligat_id>0 " + (f == 0 ? "AND s.durum='Açık' " : f == 1 ? "AND s.durum='Tamamlandı' " : "") +
                 "ORDER BY CASE s.durum WHEN 'Açık' THEN 0 ELSE 1 END, s.son_tarih");
             if (q.Length > 0)
                 rows = rows.Where(r => Utils.TrLower(r.S("baslik") + " " + r.S("dayanak") + " " + r.S("dava") + " " + r.S("uets") + " " + r.S("notlar")).Contains(q)).ToList();
