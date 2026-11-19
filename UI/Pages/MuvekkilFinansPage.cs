@@ -512,7 +512,7 @@ public class MuvekkilFinansPage : BasePage
             m.IsOpen = true;
         };
         Button B(string t, string ipucu, string stil, Action a) { var d = Ui.Btn(t, stil, a); d.ToolTip = ipucu; return d; }
-        var alt = Ui.FRow(B("＋ Yeni dava", "Dava Takibi'nde yeni dava açar", "Primary", () => Ctx.Navigate("dava", "YeniDava")),
+        var alt = Ui.FRow(B("＋ Yeni dava", "Dosyalar sayfasında yeni dava açar", "Primary", () => Ctx.Navigate("dava", "YeniDava")),
                           B("💰 Tahsilat gir", "Cari hesaba tahsilat ekler", "", TahsilatEkle),
                           B("📎 Evrak ekle", "Vekaletname/evrak kaydı ekler", "", () => { _tabs.SelectedItem = _tabV; VekEkle(); }),
                           B("📝 Dilekçe hazırla", "Evrak ekranında şablondan belge üretir", "", () => Ctx.Navigate("evrak", null)), diger);
@@ -670,7 +670,7 @@ public class MuvekkilFinansPage : BasePage
     UIElement BuildDavalar()
     {
         var d = new DockPanel();
-        var b = Ui.HRow(Ui.Btn("📂 Dosya Kartı", "Ok", DosyaKartinaGit), Ui.Btn("📁 Dava Takibi", "", () => Ctx.Navigate("dava", null)));
+        var b = Ui.HRow(Ui.Btn("📂 Dosya Kartı", "Ok", DosyaKartinaGit), Ui.Btn("📁 Dosyalar", "", () => Ctx.Navigate("dava", null)));
         b.Margin = new Thickness(0, 6, 0, 0);
         DockPanel.SetDock(b, Dock.Bottom);
         d.Children.Add(b); d.Children.Add(_tDv);

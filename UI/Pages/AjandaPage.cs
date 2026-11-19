@@ -235,7 +235,7 @@ public class AjandaPage : BasePage
         Ekle("Yeni etkinlik…", () => Yeni(DateTime.Today, ""));
         Ekle("Yazdır…", Yazdir);
         Ekle("Telefon/Outlook takvimine aktar (.ics)…", IcsAktar);
-        Ekle("Dava Takibi sayfasına git", () => Ctx.Navigate("dava", null));
+        Ekle("Dosyalar sayfasına git", () => Ctx.Navigate("dava", null));
         m.IsOpen = true;
     }
 

@@ -56,14 +56,18 @@ public class DavaPage : BasePage
         AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         VerticalContentAlignment = VerticalAlignment.Top,
     };
-    TabItem _tabS = null!, _tabM = null!;
+    TabItem _tabS = null!, _tabM = null!, _tabKart = null!;
+    readonly TabControl _tabs = new();
+    readonly DosyaKartiPage _kart;
+    long _kartId;
     UIElement _detay = null!, _bos = null!;
     long _notId;
     bool _notKirli, _notYukleniyor, _busy;
 
     public DavaPage(AppCtx ctx) : base(ctx)
     {
-        Top(Ui.PageHeader("Dava Takibi", "Dava kartına tıklayın: aşama, süreler, masraflar ve notlar sağda açılır • çift tıklayınca Dosya Kartı"));
+        _kart = new DosyaKartiPage(ctx, true);
+        Top(Ui.PageHeader("Dosyalar", "Soldan dosya seçin: sağda Dosya Kartı (zaman çizelgesi, evrak, mali kayıtlar), aşama, süreler, masraflar ve notlar açılır"));
 
         // özet kartları
         var kpi = new UniformGrid { Columns = 4, Margin = new Thickness(0, 0, -10, 12) };
@@ -138,8 +142,8 @@ public class DavaPage : BasePage
 
         // başlık kartı
         var info = new StackPanel(); info.Children.Add(_dTitle); info.Children.Add(_dSub);
-        var eylem = Ui.WRow(Ui.Btn("📂 Dosya Kartı", "Ok", DosyaKarti), Ui.Btn("Düzenle", "", EditD), Ui.Btn("Sil", "Danger", DelD));
-        eylem.HorizontalAlignment = HorizontalAlignment.Right; eylem.MaxWidth = 380;
+        var eylem = Ui.WRow(Ui.Btn("✏ Düzenle", "", EditD), Ui.Btn("Sil", "Danger", DelD));
+        eylem.HorizontalAlignment = HorizontalAlignment.Right; eylem.MaxWidth = 300;
         var hg = new Grid();
         hg.ColumnDefinitions.Add(new ColumnDefinition()); hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(eylem, 1);
@@ -163,7 +167,11 @@ public class DavaPage : BasePage
 
         dock.Children.Add(hdr); dock.Children.Add(stepBaslik); dock.Children.Add(_step); dock.Children.Add(kpi);
 
-        var tabs = new TabControl();
+        var tabs = _tabs;
+        // Dosya Kartı (zaman çizelgesi, evrak, mali kayıtlar): yalnızca bu sekme açıkken yüklenir
+        _tabKart = Ui.Tab("Dosya Kartı", _kart);
+        tabs.Items.Add(_tabKart);
+        tabs.SelectionChanged += (_, e) => { if (ReferenceEquals(e.OriginalSource, tabs)) KartYukle(); };
         // HMK
         var tw = new DockPanel();
         var upd = Ui.Btn("Aşama Tarihlerini Güncelle", "", EditStages);
@@ -210,6 +218,7 @@ public class DavaPage : BasePage
     public override void Refresh()
     {
         NotlariYaz();
+        if (Hedef == 0 && DosyaKartiPage.Hedef > 0) { Hedef = DosyaKartiPage.Hedef; DosyaKartiPage.Hedef = 0; }
         if (Hedef > 0)
         {
             _curId = Hedef; Hedef = 0;
@@ -428,6 +437,8 @@ public class DavaPage : BasePage
             _notId = d.L("id");
             _notes.Text = d.S("genel_notlar");
             _notKirli = false; _notDurum.Text = "";
+            _kartId = 0;
+            KartYukle();
         }
         finally { _notYukleniyor = false; }
     }
@@ -488,12 +499,24 @@ public class DavaPage : BasePage
 
     public void YeniDava() => AddD();
 
+    /// <summary>Seçili dosyanın Dosya Kartı sekmesini açar.</summary>
     void DosyaKarti()
     {
-        var c = _cur;
-        if (c == null) { Ui.Info(this, "Önce bir dava seçin."); return; }
-        DosyaKartiPage.Hedef = c.L("id");
-        Ctx.Navigate("dosya_karti", null);
+        if (_cur == null) { Ui.Info(this, "Önce bir dosya seçin."); return; }
+        _tabs.SelectedItem = _tabKart;
+        KartYukle();
+    }
+
+    /// <summary>Dışarıdan (ör. Dosya Kartı bağlantılarından) gelinirken Dosya Kartı sekmesini seçer.</summary>
+    public void KartSekmesi() { if (_cur != null) _tabs.SelectedItem = _tabKart; KartYukle(); }
+
+    void KartYukle()
+    {
+        if (_cur == null || !ReferenceEquals(_tabs.SelectedItem, _tabKart)) return;
+        var id = _cur.L("id");
+        if (id == _kartId) return;
+        _kartId = id;
+        _kart.AcDava(id);
     }
 
     void AddD()

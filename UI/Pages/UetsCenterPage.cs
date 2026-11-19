@@ -350,7 +350,7 @@ public class UetsCenterPage : BasePage
             ["genel_notlar"] = $"UETS tebligatından açıldı ({Utils.FmtDate(t.S("teblig_tarihi"))})",
         });
         Db.Update("genel_tebligatlar", t.L("id"), new Dictionary<string, object?> { ["durum"] = "İşlendi" });
-        Ui.Info(this, $"Dava kaydı #{did} açıldı. 'Dava Takibi' sayfasından tamamlayın.");
+        Ui.Info(this, $"Dava kaydı #{did} açıldı. Dosyalar sayfasından tamamlayın.");
         Refresh();
     }
 }

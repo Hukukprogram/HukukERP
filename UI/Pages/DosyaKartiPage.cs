@@ -46,9 +46,13 @@ public class DosyaKartiPage : BasePage
     Row? _sec; Border? _secB;
     bool _busy;
 
-    public DosyaKartiPage(AppCtx ctx) : base(ctx)
+    readonly bool _gomulu;
+
+    /// <param name="gomulu">true: Dosyalar sayfasında sekme olarak gömülür (üst başlık, müvekkil/dava seçici ve aşama çubuğu gösterilmez; dava dışarıdan AcDava ile verilir).</param>
+    public DosyaKartiPage(AppCtx ctx, bool gomulu = false) : base(ctx, !gomulu)
     {
-        Top(Ui.PageHeader("Dosya Kartı", "Bir davaya bağlı her şey tek ekranda • evrakı pencereye sürükleyip bırakabilirsiniz"));
+        _gomulu = gomulu;
+        if (!gomulu) Top(Ui.PageHeader("Dosya Kartı", "Bir davaya bağlı her şey tek ekranda • evrakı pencereye sürükleyip bırakabilirsiniz"));
         _combo.SelectionChanged += (_, _) =>
         {
             if (_busy) return;
@@ -96,7 +100,13 @@ public class DosyaKartiPage : BasePage
         var tlBaslik = Ui.H2("Zaman çizelgesi"); tlBaslik.Margin = new Thickness(2, 6, 0, 4);
 
         var sayfa = new StackPanel { Margin = new Thickness(0, 0, 8, 0) };
-        foreach (var e in new UIElement[] { sec, seritScroll, hdr, _step, araclar, kpi, tlBaslik, chips, _tl }) sayfa.Children.Add(e);
+        if (gomulu)
+        {
+            eylem.HorizontalAlignment = HorizontalAlignment.Left; eylem.MaxWidth = double.PositiveInfinity; eylem.Margin = new Thickness(0, 8, 0, 6);
+            foreach (var e in new UIElement[] { eylem, araclar, kpi, tlBaslik, chips, _tl }) sayfa.Children.Add(e);
+        }
+        else
+            foreach (var e in new UIElement[] { sec, seritScroll, hdr, _step, araclar, kpi, tlBaslik, chips, _tl }) sayfa.Children.Add(e);
         var kaydir = new ScrollViewer { Content = sayfa, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Fill(kaydir);
 
@@ -138,14 +148,29 @@ public class DosyaKartiPage : BasePage
         var m = new ContextMenu();
         void Ekle(string h, Action a) { var mi = new MenuItem { Header = h }; mi.Click += (_, _) => a(); m.Items.Add(mi); }
         Ekle("İş Listesi", () => Ctx.Navigate("is_listesi", null));
-        Ekle("Dava Takibi", () => { DavaPage.Hedef = Secili; Ctx.Navigate("dava", null); });
+        if (!_gomulu) Ekle("Dava Takibi", () => { DavaPage.Hedef = Secili; Ctx.Navigate("dava", null); });
         Ekle("Emanet / Masraf", () => Ctx.Navigate("emanet", null));
         Ekle("Müvekkil sayfası", () => Ctx.Navigate("muvekkil", null));
         m.IsOpen = true;
     }
 
+    /// <summary>Gömülü kullanımda: verilen davanın kartını yükler.</summary>
+    public void AcDava(long id)
+    {
+        _busy = true;
+        try
+        {
+            _combo.Items.Clear();
+            if (id > 0) { _combo.Items.Add(new ComboItem { Value = id, Label = "" }); _combo.SelectedIndex = 0; }
+            else _combo.SelectedIndex = -1;
+        }
+        finally { _busy = false; }
+        Yukle();
+    }
+
     public override void Refresh()
     {
+        if (_gomulu) { Yukle(); return; }
         _busy = true;
         try
         {
@@ -209,7 +234,7 @@ public class DosyaKartiPage : BasePage
             b.MouseLeftButtonUp += (_, _) => DosyaGec(id);
             _serit.Children.Add(b);
         }
-        if (_seritRows.Count == 0) _serit.Children.Add(Ui.Muted("Bu müvekkilin dava dosyası yok. Önce Dava Takibi'nde dava ekleyin."));
+        if (_seritRows.Count == 0) _serit.Children.Add(Ui.Muted("Bu müvekkilin dava dosyası yok. Önce Dosyalar sayfasında dava ekleyin."));
     }
 
     void DosyaGec(long id)
@@ -264,7 +289,7 @@ public class DosyaKartiPage : BasePage
         _sec = null; _secB = null;
         if (id == 0)
         {
-            _dTitle.Text = "Dava seçin"; _dSub.Text = "Üstten müvekkil ve dava seçin ya da önce 'Dava Takibi'nde dava ekleyin.";
+            _dTitle.Text = "Dava seçin"; _dSub.Text = "Üstten müvekkil ve dava seçin ya da önce Dosyalar sayfasında dava ekleyin.";
             _dEtiket.Children.Clear(); _step.Children.Clear(); _kayitlar = new();
             _kSure.Text = _kDur.Text = _kTeb.Text = _kCari.Text = _kMas.Text = _kZaman.Text = "—";
             Cizelge();

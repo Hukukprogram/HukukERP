@@ -334,8 +334,7 @@ public class MainWindow : Window
             {
                 ("ofis_dash", "▦  Ofis Dashboard", new DashboardPage(_ctx, "avukat")),
                 ("muvekkil", "💼  Müvekkil", new MuvekkilFinansPage(_ctx)),
-                ("dava", "📁  Dava Takibi", new DavaPage(_ctx)),
-                ("dosya_karti", "📂  Dosya Kartı", new DosyaKartiPage(_ctx)),
+                ("dava", "📁  Dosyalar", new DavaPage(_ctx)),
                 ("ajanda", "📅  Ajanda", new AjandaPage(_ctx)),
                 ("is_listesi", "⏱  İş Listesi (Süreler)", new IsListesiPage(_ctx)),
                 ("kanban", "✅  Görevler", new KanbanPage(_ctx)),
@@ -439,6 +438,8 @@ public class MainWindow : Window
 
     void Navigate(string key, string? action)
     {
+        // Dosya Kartı artık Dosyalar sayfasının sekmesi: eski bağlantılar oraya yönlenir
+        if (key == "dosya_karti") { key = "dava"; if (string.IsNullOrEmpty(action)) action = "KartSekmesi"; }
         int i = _keys.IndexOf(key);
         if (i < 0) return;
         Goto(i);
