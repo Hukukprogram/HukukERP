@@ -28,6 +28,9 @@ public class MuvekkilFinansPage : BasePage
     readonly DataTable _tS = new(("Son Gün", "son_tarih", Fmt.Date), ("Süre / İş", "baslik", null), ("Dava", "dava", null), ("Durum", "durum", null));
     readonly DataTable _tOzD = new(("Mahkeme", "mahkeme_adi", null), ("Esas", "esas_no", null), ("Aşama", "asama_durum", null), ("Duruşma", "durusma_tarihi", Fmt.Date));
     readonly DataTable _tOzC = new(("Tarih", "tarih", Fmt.Date), ("Açıklama", "aciklama", null), ("Tutar", "tutar", Fmt.Money));
+    readonly DataTable _tIc = new(("Borçlu", "borclu", null), ("İcra Dairesi", "icra_dairesi", null), ("Esas No", "esas_no", null), ("Takip", "takip_tarihi", Fmt.Date),
+        ("Kesinleşme", "kesinlesme_tarihi", Fmt.Date), ("Alacak", "alacak_tutari", Fmt.Money), ("Tahsil", "tahsil_edilen", Fmt.Money), ("Kalan", "kalan", Fmt.Money),
+        ("Durum", "durum", null), ("Açık Görev", "gorev_txt", null));
     readonly TextBlock _vTitle = Ui.H2("Evrak ve vekaletnameler");
     readonly TextBlock _fSum = Ui.Muted("");
     readonly TextBlock _hTitle = Ui.H2("Tahsilat hareketleri — cari kaydı seçin");
@@ -104,6 +107,7 @@ public class MuvekkilFinansPage : BasePage
         _tF.SelectionChanged += (_, _) => { if (!_busy) LoadHareket(); };
         _tV.MouseDoubleClick += (_, _) => VekAc();
         _tDv.MouseDoubleClick += (_, _) => DosyaKartinaGit();
+        _tIc.MouseDoubleClick += (_, _) => IcraAc();
         _tOzD.MouseDoubleClick += (_, _) =>
         {
             if (_tOzD.Current is { } c) { DosyaKartiPage.Hedef = c.L("id"); Ctx.Navigate("dosya_karti", null); }
@@ -644,7 +648,7 @@ public class MuvekkilFinansPage : BasePage
         _dkSure.Text = sure.Length == 0 ? "Yok" : $"{Utils.FmtDate(sure)} ({(ks == 0 ? "bugün" : ks + " gün")})";
         _dkSure.SetResourceReference(TextBlock.ForegroundProperty, sure.Length > 0 && ks != null && ks <= 3 ? "danger" : "text");
         _tabF.Header = $"Cari hesap ({_tF.Rows.Count})";
-        _tabD.Header = $"Dosyalar ({_tDv.Rows.Count})";
+        _tabD.Header = $"Dosyalar ({_tDv.Rows.Count} dava, {_tIc.Rows.Count} icra)";
         _tabS.Header = $"Süreler ({_tS.Rows.Count(r => r.S("durum") == "Açık")} açık)";
         _tabV.Header = $"Evrak ({_tV.Rows.Count})";
     }
@@ -669,18 +673,62 @@ public class MuvekkilFinansPage : BasePage
 
     UIElement BuildDavalar()
     {
+        // üst: dava dosyaları
         var d = new DockPanel();
         var b = Ui.HRow(Ui.Btn("📂 Dosya Kartı", "Ok", DosyaKartinaGit), Ui.Btn("📁 Dosyalar", "", () => Ctx.Navigate("dava", null)));
         b.Margin = new Thickness(0, 6, 0, 0);
         DockPanel.SetDock(b, Dock.Bottom);
-        d.Children.Add(b); d.Children.Add(_tDv);
-        return d;
+        var t1 = Ui.Text("Dava dosyaları", 14, true); t1.Margin = new Thickness(0, 0, 0, 6);
+        DockPanel.SetDock(t1, Dock.Top);
+        d.Children.Add(t1); d.Children.Add(b); d.Children.Add(_tDv);
+
+        // alt: icra dosyaları (borçlu bazında)
+        var i = new DockPanel();
+        var ib = Ui.HRow(Ui.Btn("⚖ İcra dosyasını aç", "Ok", IcraAc), Ui.Btn("＋ Yeni icra dosyası", "Primary", IcraYeni), Ui.Btn("⏱ İcra Görevleri", "", () => Ctx.Navigate("icra_gorev", null)));
+        ib.Margin = new Thickness(0, 6, 0, 0);
+        DockPanel.SetDock(ib, Dock.Bottom);
+        var t2 = Ui.Text("İcra dosyaları (borçlu)", 14, true); t2.Margin = new Thickness(0, 0, 0, 6);
+        DockPanel.SetDock(t2, Dock.Top);
+        i.Children.Add(t2); i.Children.Add(ib); i.Children.Add(_tIc);
+        return Ui.VSplit(d, i, 1, 1);
     }
 
     void LoadDavalar()
     {
         _tDv.Load(Db.Query("SELECT * FROM davalar WHERE muvekkil_id=? ORDER BY id DESC", _sid),
             new() { ["durusma_tarihi"] = r => Ui.DeadlineKind(r.S("durusma_tarihi")) });
+        LoadIcra();
+    }
+
+    void LoadIcra()
+    {
+        var rows = Db.Query(
+            "SELECT i.*, (SELECT COUNT(*) FROM sureler s WHERE s.icra_id=i.id AND s.durum='Açık') AS gorev_say, " +
+            "(SELECT MIN(s.son_tarih) FROM sureler s WHERE s.icra_id=i.id AND s.durum='Açık') AS gorev_son " +
+            "FROM icra_takipleri i WHERE i.muvekkil_id=? ORDER BY i.durum='Kapandı', i.id DESC", _sid);
+        foreach (var r in rows)
+        {
+            r["kalan"] = r.D("alacak_tutari") - r.D("tahsil_edilen");
+            r["gorev_txt"] = r.L("gorev_say") == 0 ? "" : $"{r.L("gorev_say")} • {Utils.FmtDate(r.S("gorev_son"))}";
+        }
+        _tIc.Load(rows, new()
+        {
+            ["durum"] = r => r.S("durum") == "Kapandı" ? "muted" : "warn",
+            ["kalan"] = r => r.D("kalan") > 0 && r.S("durum") != "Kapandı" ? "danger" : "ok",
+        });
+    }
+
+    void IcraAc()
+    {
+        IcraPage.Hedef = _sid;
+        IcraPage.HedefDosya = _tIc.Current?.L("id") ?? 0;
+        Ctx.Navigate("icra", null);
+    }
+
+    void IcraYeni()
+    {
+        IcraPage.Hedef = _sid;
+        Ctx.Navigate("icra", "Yeni");
     }
 
     void DosyaKartinaGit()

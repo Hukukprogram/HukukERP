@@ -56,6 +56,9 @@ public class IcraPage : BasePage
     UIElement _altBos = null!, _altDetay = null!;
     TabItem _tabG = null!;
 
+    /// <summary>Başka sayfalardan (ör. Müvekkil) belirli müvekkili / icra dosyasını açmak için.</summary>
+    public static long Hedef, HedefDosya;
+
     Row? _mSel;
     long _mid, _fid;
     bool _busy, _notYukleniyor, _notKirli;
@@ -263,7 +266,16 @@ public class IcraPage : BasePage
         return (Color)ColorConverter.ConvertFromString(Palet[h % Palet.Length]);
     }
 
-    public override void Refresh() => ListeYukle();
+    public override void Refresh()
+    {
+        if (Hedef > 0)
+        {
+            _mid = Hedef; Hedef = 0; _fid = HedefDosya; HedefDosya = 0;
+            _fl = Fl.Tumu; _busy = true; _ara.Text = ""; _busy = false;
+            _sag.Content = _bos;
+        }
+        ListeYukle();
+    }
 
     void ListeYukle()
     {
