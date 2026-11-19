@@ -23,6 +23,10 @@ public class SearchPick : Button
 
     public SearchPick()
     {
+        // türetilmiş sınıfa Button'ın örtük stili uygulanmaz: modern görünüm için elle atanır
+        if (Application.Current?.TryFindResource(typeof(Button)) is Style st) Style = st;
+        Height = 34;
+        VerticalContentAlignment = VerticalAlignment.Center;
         HorizontalContentAlignment = HorizontalAlignment.Left;
         MinWidth = 220;
         Padding = new Thickness(10, 6, 10, 6);
