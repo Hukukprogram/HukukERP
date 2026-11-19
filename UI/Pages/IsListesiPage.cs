@@ -107,6 +107,22 @@ public class IsListesiPage : BasePage
     /// tebligat verilirse başlangıç tarihi, metin eşleşmesi ve bağlantı (tebligat_id) ondan gelir.</summary>
     public static Dictionary<string, object?>? KatalogHazirla(DependencyObject? owner, Db db, Row? tebligat)
     {
+        // Tebligata bağlı olmayan çağrıda modern elle giriş penceresi; "Katalogdan seç" denirse eski pencere açılır
+        if (tebligat == null)
+        {
+            var el = SureDialog.Goster(owner!, out var katalog);
+            if (!katalog)
+            {
+                if (el == null) return null;
+                return new Dictionary<string, object?>
+                {
+                    ["baslangic"] = Utils.Iso(el.Teblig),
+                    ["son_tarih"] = Utils.Iso(el.Son),
+                    ["notlar"] = el.Aciklama + "\nSüre elle girildi; adli tatil uzatması uygulanmaz, süreyi kendiniz de kontrol edin.",
+                };
+            }
+        }
+
         var liste = IsSureleri.Liste(Path.GetDirectoryName(db.Path));
         var opts = new List<(object? Value, string Label)> { (-1L, "— Katalogda yok: elle gireceğim —") };
         for (int i = 0; i < liste.Count; i++) opts.Add(((long)i, liste[i].Ad));
