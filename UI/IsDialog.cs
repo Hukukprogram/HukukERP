@@ -94,7 +94,17 @@ public class IsDialog : Window
 
         var iki = new UniformGrid { Columns = 3, Margin = new Thickness(0, 0, -10, 0) };
         StackPanel Kol(string et, UIElement c) { var sp = new StackPanel { Margin = new Thickness(0, 0, 10, 0) }; sp.Children.Add(Et(et)); sp.Children.Add(c); return sp; }
-        iki.Children.Add(Kol("Süre türü", _tur)); iki.Children.Add(Kol("Durum", _durum)); iki.Children.Add(Kol("Bağlı dava", _dava));
+        long icraId = 0; if (_eski.TryGetValue("icra_id", out var iv) && iv != null) long.TryParse(Convert.ToString(iv), out icraId);
+        UIElement baglanti = _dava;
+        string baglantiEt = "Bağlı dava";
+        if (icraId > 0)
+        {
+            var ic = db.One("SELECT icra_dairesi, esas_no, borclu FROM icra_takipleri WHERE id=?", icraId);
+            var tx = Ui.Text(ic == null ? "İcra dosyası" : $"{ic.S("icra_dairesi")} {ic.S("esas_no")} — {ic.S("borclu")}".Trim(' ', '—', ' '), 13, false, "text", true);
+            tx.VerticalAlignment = VerticalAlignment.Center; tx.Height = 36; tx.TextTrimming = TextTrimming.CharacterEllipsis;
+            baglanti = tx; baglantiEt = "İcra dosyası";
+        }
+        iki.Children.Add(Kol("Süre türü", _tur)); iki.Children.Add(Kol("Durum", _durum)); iki.Children.Add(Kol(baglantiEt, baglanti));
         kok.Children.Add(iki);
 
         // tebligat süresi kartı
@@ -190,6 +200,7 @@ public class IsDialog : Window
             ["durum"] = Durumlar[Math.Max(0, _durum.SelectedIndex)],
         };
         if (_eski.TryGetValue("tebligat_id", out var tb) && tb != null) r["tebligat_id"] = tb;
+        if (_eski.TryGetValue("icra_id", out var ib) && ib != null) { r["icra_id"] = ib; r["dava_id"] = 0L; }
         _sonuc = r;
         DialogResult = true;
     }

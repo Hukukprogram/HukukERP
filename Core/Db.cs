@@ -442,6 +442,8 @@ public class Db
             Execute("ALTER TABLE genel_tebligatlar ADD COLUMN dava_id INTEGER DEFAULT 0");
         if (!Query("PRAGMA table_info(finans_tahsilat)").Any(r => r.S("name") == "dava_id"))
             Execute("ALTER TABLE finans_tahsilat ADD COLUMN dava_id INTEGER DEFAULT 0");
+        KolonEkle("sureler", "icra_id", "INTEGER DEFAULT 0");
+        KolonEkle("icra_takipleri", "kesinlesme_tarihi", "TEXT DEFAULT ''");
         KolonEkle("davalar", "kapanis_tarihi", "TEXT DEFAULT ''");
         KolonEkle("davalar", "saklama_bitis", "TEXT DEFAULT ''");
         KolonEkle("davalar", "kapanis_notu", "TEXT DEFAULT ''");
