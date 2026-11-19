@@ -244,7 +244,6 @@ public class IcraPage : BasePage
         nd.Children.Add(nb); nd.Children.Add(_not);
         _tabs.Items.Add(Ui.Tab("Notlar", nd));
 
-        var altKart = new Border { Child = _altIcerik };
         _altDetay = _tabs;
         _altIcerik.Content = _altBos;
         dock.Children.Add(Ui.VSplit(ust, _altIcerik, 3, 2));
