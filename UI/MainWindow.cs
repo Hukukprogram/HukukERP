@@ -135,6 +135,7 @@ public class MainWindow : Window
         }
         Ekle("Yeni müvekkil", "muvekkil", "YeniMuvekkil");
         Ekle("Yeni dava", "dava", "YeniDava");
+        Ekle("Yeni icra dosyası", "icra", "Yeni");
         Ekle("Yeni süreli iş", "is_listesi", "YeniIs");
         Ekle("Katalogdan tebligat süresi", "is_listesi", "KatalogtanSure");
         Ekle("Yeni görev", "kanban", "YeniGorev");
@@ -335,6 +336,7 @@ public class MainWindow : Window
                 ("ofis_dash", "▦  Ofis Dashboard", new DashboardPage(_ctx, "avukat")),
                 ("muvekkil", "💼  Müvekkil", new MuvekkilFinansPage(_ctx)),
                 ("dava", "📁  Dosyalar", new DavaPage(_ctx)),
+                ("icra", "⚖  İcra Dosyaları", new IcraPage(_ctx)),
                 ("ajanda", "📅  Ajanda", new AjandaPage(_ctx)),
                 ("is_listesi", "⏱  İş Listesi (Süreler)", new IsListesiPage(_ctx)),
                 ("kanban", "✅  Görevler", new KanbanPage(_ctx)),

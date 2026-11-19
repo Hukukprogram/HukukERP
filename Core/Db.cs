@@ -165,6 +165,25 @@ CREATE TABLE IF NOT EXISTS bildirim_log (
 CREATE INDEX IF NOT EXISTS ix_teb_tip_durum ON genel_tebligatlar(hesap_tipi, durum);
 CREATE INDEX IF NOT EXISTS ix_teb_hash ON genel_tebligatlar(dosya_hash);
 CREATE INDEX IF NOT EXISTS ix_masraf_dava ON dava_masraflari(dava_id);
+CREATE TABLE IF NOT EXISTS icra_takipleri (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    muvekkil_id INTEGER DEFAULT 0,
+    dava_id INTEGER DEFAULT 0,
+    icra_dairesi TEXT DEFAULT '',
+    esas_no TEXT DEFAULT '',
+    takip_turu TEXT DEFAULT 'İlamsız',
+    borclu TEXT DEFAULT '',
+    borclu_tc TEXT DEFAULT '',
+    takip_tarihi TEXT DEFAULT '',
+    alacak_tutari REAL DEFAULT 0,
+    tahsil_edilen REAL DEFAULT 0,
+    durum TEXT DEFAULT 'Derdest',
+    sonraki_islem TEXT DEFAULT '',
+    sonraki_islem_tarihi TEXT DEFAULT '',
+    notlar TEXT DEFAULT '',
+    olusturma TEXT DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS ix_icra_muv ON icra_takipleri(muvekkil_id);
 CREATE TABLE IF NOT EXISTS cop_kutusu (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tablo TEXT NOT NULL,
