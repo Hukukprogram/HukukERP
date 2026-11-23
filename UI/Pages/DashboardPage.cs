@@ -221,6 +221,7 @@ public class DashboardPage : BasePage
         var icg = d.Query("SELECT s.*, TRIM(COALESCE(i.icra_dairesi,'') || ' ' || COALESCE(i.esas_no,'')) AS dosya, COALESCE(i.borclu,'') AS borclu, COALESCE(m.ad_soyad,'') AS muvekkil " +
                           "FROM sureler s JOIN icra_takipleri i ON i.id=s.icra_id LEFT JOIN muvekkiller m ON m.id=i.muvekkil_id " +
                           "WHERE s.durum='Açık' AND s.icra_id>0 ORDER BY s.son_tarih='', s.son_tarih LIMIT 10");
+<<<<<<< HEAD
         var hz = IcraHaciz.Uyarilar(d);
         foreach (var h in hz.Take(8))
         {
@@ -230,6 +231,9 @@ public class DashboardPage : BasePage
             _cIcra.AddRow(Ui.Text($"🔒 {h.S("tur")} haczi düşüyor: {h.S("aciklama")}  —  {alth}", 13, false, "text", true), ph, IcraHaciz.Renk(h) == "muted" ? "warn" : IcraHaciz.Renk(h));
         }
         if (icg.Count == 0 && hz.Count == 0) _cIcra.AddEmpty("Açık icra görevi / haciz uyarısı yok");
+=======
+        if (icg.Count == 0) _cIcra.AddEmpty("Açık icra görevi yok");
+>>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
         foreach (var ij in icg)
         {
             var ki = Utils.DaysLeft(ij.S("son_tarih"));

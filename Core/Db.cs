@@ -184,6 +184,7 @@ CREATE TABLE IF NOT EXISTS icra_takipleri (
     olusturma TEXT DEFAULT (datetime('now','localtime'))
 );
 CREATE INDEX IF NOT EXISTS ix_icra_muv ON icra_takipleri(muvekkil_id);
+<<<<<<< HEAD
 CREATE TABLE IF NOT EXISTS icra_hacizler (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     icra_id INTEGER NOT NULL DEFAULT 0,
@@ -198,6 +199,8 @@ CREATE TABLE IF NOT EXISTS icra_hacizler (
     notlar TEXT DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS ix_haciz_icra ON icra_hacizler(icra_id);
+=======
+>>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
 CREATE TABLE IF NOT EXISTS cop_kutusu (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tablo TEXT NOT NULL,
@@ -457,6 +460,7 @@ public class Db
         if (!Query("PRAGMA table_info(finans_tahsilat)").Any(r => r.S("name") == "dava_id"))
             Execute("ALTER TABLE finans_tahsilat ADD COLUMN dava_id INTEGER DEFAULT 0");
         KolonEkle("sureler", "icra_id", "INTEGER DEFAULT 0");
+<<<<<<< HEAD
         foreach (var (k, t) in new[] { ("istinaf_mahkemesi", "TEXT DEFAULT ''"), ("istinaf_esas_no", "TEXT DEFAULT ''"), ("istinaf_basvuru_tarihi", "TEXT DEFAULT ''"),
                                        ("istinaf_karar_tarihi", "TEXT DEFAULT ''"), ("istinaf_sonuc", "TEXT DEFAULT ''"), ("istinaf_notu", "TEXT DEFAULT ''") })
             KolonEkle("davalar", k, t);
@@ -464,6 +468,8 @@ public class Db
         Execute("UPDATE davalar SET asama_durum='Dilekçeler' WHERE asama_durum IN ('Dava Dilekçesi','Cevap Dilekçesi','Cevaba Cevap','İkinci Cevap','')");
         Execute("UPDATE davalar SET asama_durum='Tahkikat' WHERE asama_durum IN ('Tahkikat / Delil','Bilirkişi')");
         Execute("UPDATE davalar SET asama_durum='Karar' WHERE asama_durum='Karar Aşaması'");
+=======
+>>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
         KolonEkle("icra_takipleri", "kesinlesme_tarihi", "TEXT DEFAULT ''");
         Execute("CREATE INDEX IF NOT EXISTS ix_sure_icra ON sureler(icra_id)");
         KolonEkle("davalar", "kapanis_tarihi", "TEXT DEFAULT ''");
