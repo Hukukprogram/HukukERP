@@ -461,6 +461,7 @@ public class Db
                                        ("istinaf_karar_tarihi", "TEXT DEFAULT ''"), ("istinaf_sonuc", "TEXT DEFAULT ''"), ("istinaf_notu", "TEXT DEFAULT ''") })
             KolonEkle("davalar", k, t);
         // eski 8 aşama → yeni 4 aşama (Dilekçeler • Tahkikat • Karar • İstinaf); "Karara Çıktı" kapalı dosya işareti olarak kalır
+        Execute("UPDATE davalar SET dava_dilekcesi_tarih='', cevap_dilekcesi_tarih='', cevaba_cevap_tarih='', ikinci_cevap_tarih='' WHERE dava_dilekcesi_tarih<>'' OR cevap_dilekcesi_tarih<>'' OR cevaba_cevap_tarih<>'' OR ikinci_cevap_tarih<>''");
         Execute("UPDATE davalar SET asama_durum='Dilekçeler' WHERE asama_durum IN ('Dava Dilekçesi','Cevap Dilekçesi','Cevaba Cevap','İkinci Cevap','')");
         Execute("UPDATE davalar SET asama_durum='Tahkikat' WHERE asama_durum IN ('Tahkikat / Delil','Bilirkişi')");
         Execute("UPDATE davalar SET asama_durum='Karar' WHERE asama_durum='Karar Aşaması'");

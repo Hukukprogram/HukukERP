@@ -14,11 +14,6 @@ public class DavaPage : BasePage
     /// <summary>Dosya aşamaları. "Karara Çıktı" (dosya kapatıldı) listede seçilmez; yalnızca 'Dosyayı Kapat' ile atanır.</summary>
     public static readonly string[] Asamalar = { "Dilekçeler", "Tahkikat", "Karar", "İstinaf" };
     public const string Kapali = "Karara Çıktı";
-    static readonly (string Key, string Ad, string Dayanak)[] Hmk =
-    {
-        ("dava_dilekcesi_tarih", "Dava Dilekçesi", "HMK 119"), ("cevap_dilekcesi_tarih", "Cevap Dilekçesi", "HMK 127 (2 hafta)"),
-        ("cevaba_cevap_tarih", "Cevaba Cevap", "HMK 136 (2 hafta)"), ("ikinci_cevap_tarih", "İkinci Cevap", "HMK 136 (2 hafta)"),
-    };
     static readonly string[] Siralar = { "Duruşma tarihi (yakın → uzak)", "Müvekkil (A → Z)", "Mahkeme (A → Z)", "Aşama (ilerlemiş önce)", "Son eklenen" };
     enum Fl { Derdest, Durusma, Sure, Karar, Tumu }
 
@@ -48,7 +43,8 @@ public class DavaPage : BasePage
     readonly TextBlock _dTitle = Ui.Text("", 20, true, "text", true), _dSub = Ui.Muted("");
     readonly UniformGrid _step = new() { Columns = 4, Margin = new Thickness(0, 0, 0, 8), ToolTip = "Dava aşaması — bir aşamaya tıklayarak güncelleyin" };
     readonly TextBlock _dkDur = Ui.Text("–", 16, true), _dkSure = Ui.Text("–", 16, true), _dkMasraf = Ui.Text("–", 16, true), _dkTur = Ui.Text("–", 16, true);
-    readonly DataTable _tTl = new(("Aşama", "asama", null), ("Tarih", "tarih", Fmt.Date), ("Dayanak", "dayanak", null));
+    readonly DataTable _tTl = new(("Tarih", "tarih", Fmt.Date), ("Tutar", "tutar", Fmt.Money), ("Açıklama", "aciklama", null));
+    readonly TextBlock _vUcret = Ui.Text("–", 16, true), _vOde = Ui.Text("–", 16, true), _vKalan = Ui.Text("–", 16, true);
     readonly DataTable _tSu = new(("Son Gün", "son_tarih", Fmt.Date), ("Süre / İş", "baslik", null), ("Dayanak", "dayanak", null), ("Durum", "durum", null));
     readonly DataTable _tM = new(("Tarih", "tarih", Fmt.Date), ("Masraf Kalemi", "masraf_kalemi", null), ("Tutar", "tutar", Fmt.Money));
     readonly TextBlock _mSum = Ui.H2("");
@@ -190,11 +186,14 @@ public class DavaPage : BasePage
         tabs.SelectionChanged += (_, e) => { if (ReferenceEquals(e.OriginalSource, tabs)) KartYukle(); };
         // HMK
         var tw = new DockPanel();
-        var upd = Ui.Btn("Aşama Tarihlerini Güncelle", "", EditStages);
-        upd.HorizontalAlignment = HorizontalAlignment.Left; upd.Margin = new Thickness(0, 8, 0, 0);
-        DockPanel.SetDock(upd, Dock.Bottom);
-        tw.Children.Add(upd); tw.Children.Add(_tTl);
-        tabs.Items.Add(Ui.Tab("HMK Aşamaları", tw));
+        var ub = Ui.WRow(Ui.Btn("💰 Ücret Anlaşması", "Primary", UcretAnlasmasi), Ui.Btn("＋ Tahsilat Gir", "", TahsilatGir), Ui.Btn("Seçili Tahsilatı Sil", "Danger", TahsilatSil));
+        ub.Margin = new Thickness(0, 8, 0, 0);
+        DockPanel.SetDock(ub, Dock.Bottom);
+        var uk = new UniformGrid { Columns = 3, Margin = new Thickness(0, 0, -10, 10) };
+        uk.Children.Add(Kart("Anlaşılan ücret", _vUcret)); uk.Children.Add(Kart("Ödenen", _vOde)); uk.Children.Add(Kart("Kalan bakiye", _vKalan));
+        DockPanel.SetDock(uk, Dock.Top);
+        tw.Children.Add(uk); tw.Children.Add(ub); tw.Children.Add(_tTl);
+        tabs.Items.Add(Ui.Tab("Vekalet Ücreti", tw));
         // süreler
         var sw = new DockPanel();
         var sb = Ui.HRow(Ui.Btn("⏱ İş Listesine git", "", () => Ctx.Navigate("is_listesi", null)), Ui.Muted("Süre eklemek ve hesaplamak için İş Listesi sayfasını kullanın.", false));
@@ -392,7 +391,7 @@ public class DavaPage : BasePage
         void Ekle(string h, Action a) { var mi = new MenuItem { Header = h }; mi.Click += (_, _) => { if (_curId == r.L("id")) a(); }; cm.Items.Add(mi); }
         Ekle("Dosya Kartını aç", DosyaKarti);
         Ekle("Düzenle", EditD);
-        Ekle("Aşama tarihlerini güncelle", EditStages);
+        Ekle("Vekalet ücreti anlaşması", UcretAnlasmasi);
         Ekle("İstinaf bilgisi", IstinafDuzenle);
         Ekle("Masraf ekle", AddM);
         cm.Items.Add(new Separator());
@@ -458,7 +457,7 @@ public class DavaPage : BasePage
             _dkDur.Text = d.S("durusma_tarihi").Length == 0 ? "Yok" : $"{Utils.FmtDate(d.S("durusma_tarihi"))} ({(dk >= 0 ? GunMetni(dk) : "geçti")})";
             _dkTur.Text = d.S("dava_turu").Length > 0 ? d.S("dava_turu") : "—";
 
-            _tTl.Load(Hmk.Select(h => new Row { ["asama"] = h.Ad, ["tarih"] = d.S(h.Key), ["dayanak"] = h.Dayanak }).ToList());
+            VekaletYukle(d.L("id"));
             var su = Db.Query("SELECT * FROM sureler WHERE dava_id=? ORDER BY durum='Açık' DESC, son_tarih", d.L("id"));
             _tSu.Load(su, new() { ["son_tarih"] = r => r.S("durum") == "Açık" ? Ui.DeadlineKind(r.S("son_tarih")) : "muted" });
             var acik = su.Where(x => x.S("durum") == "Açık").OrderBy(x => x.S("son_tarih")).ToList();
@@ -625,14 +624,73 @@ public class DavaPage : BasePage
         if (d != null && Ui.Confirm(this, "Dava ve masrafları silinsin mi? (Çöp Kutusu'ndan geri alınabilir)")) { Db.Delete("davalar", d.L("id")); _curId = 0; Yukle(); }
     }
 
-    void EditStages()
+    Row? VekaletFin(long davaId) => Db.One("SELECT * FROM finans_tahsilat WHERE dava_id=? ORDER BY id LIMIT 1", davaId);
+
+    void VekaletYukle(long davaId)
+    {
+        var fin = VekaletFin(davaId);
+        var hr = fin == null ? new List<Row>() : Db.Query("SELECT * FROM tahsilat_hareketleri WHERE finans_id=? ORDER BY tarih DESC, id DESC", fin.L("id"));
+        var ucret = fin?.D("toplam_ucret") ?? 0;
+        var ode = hr.Sum(x => x.D("tutar"));
+        _vUcret.Text = ucret > 0 ? Utils.FmtMoney(ucret) : "Girilmedi";
+        _vOde.Text = Utils.FmtMoney(ode);
+        _vKalan.Text = ucret > 0 ? Utils.FmtMoney(Math.Max(0, ucret - ode)) : "—";
+        _tTl.Load(hr);
+    }
+
+    void UcretAnlasmasi()
     {
         var d = _cur;
         if (d == null) { Ui.Info(this, "Önce dava seçin."); return; }
-        var fields = Hmk.Select(h => new Field(h.Key, h.Ad, "date")).ToList();
-        fields.Add(new Field("asama_durum", "Güncel Aşama", "combo", Field.Of(Asamalar)));
-        var v = FormDialog.Ask(this, "HMK Aşamaları", fields, d);
-        if (v != null) { Db.Update("davalar", d.L("id"), v); Yukle(); }
+        if (d.L("muvekkil_id") == 0) { Ui.Info(this, "Bu dosyanın müvekkili seçili değil; önce müvekkili seçin."); return; }
+        var fin = VekaletFin(d.L("id"));
+        var v = FormDialog.Ask(this, "Vekalet Ücreti Anlaşması", new List<Field>
+        {
+            new("toplam_ucret", "Anlaşılan toplam ücret", "money", required: true),
+            new("sonraki_tahsilat_tarihi", "Sonraki tahsilat tarihi", "date"),
+            new("notlar", "Not (ödeme planı vb.)", "multiline"),
+        }, fin);
+        if (v == null) return;
+        long fid;
+        if (fin == null)
+        {
+            v["muvekkil_id"] = d.L("muvekkil_id"); v["dava_id"] = d.L("id");
+            v["dosya_konusu"] = $"{d.S("mahkeme_adi")} {d.S("esas_no")}".Trim();
+            fid = Db.Insert("finans_tahsilat", v);
+        }
+        else { fid = fin.L("id"); Db.Update("finans_tahsilat", fid, v); }
+        Workflows.TahsilatYenidenHesapla(Db, fid);
+        VekaletYukle(d.L("id"));
+    }
+
+    void TahsilatGir()
+    {
+        var d = _cur;
+        if (d == null) { Ui.Info(this, "Önce dava seçin."); return; }
+        var fin = VekaletFin(d.L("id"));
+        if (fin == null) { UcretAnlasmasi(); fin = VekaletFin(d.L("id")); if (fin == null) return; }
+        var v = FormDialog.Ask(this, "Tahsilat Gir", new List<Field>
+        {
+            new("tarih", "Tahsilat Tarihi", "date", def: Utils.TodayIso()),
+            new("tutar", "Tutar", "money", required: true),
+            new("aciklama", "Açıklama (nakit / havale / çek…)"),
+        });
+        if (v == null || Convert.ToDouble(v["tutar"] ?? 0.0) <= 0) return;
+        v["finans_id"] = fin.L("id");
+        Db.Insert("tahsilat_hareketleri", v);
+        Workflows.TahsilatYenidenHesapla(Db, fin.L("id"));
+        VekaletYukle(d.L("id"));
+    }
+
+    void TahsilatSil()
+    {
+        var d = _cur; var c = _tTl.Current;
+        if (d == null || c == null) { Ui.Info(this, "Önce listeden bir tahsilat seçin."); return; }
+        if (!Ui.Confirm(this, "Seçili tahsilat silinsin mi?")) return;
+        Db.Delete("tahsilat_hareketleri", c.L("id"));
+        var fin = VekaletFin(d.L("id"));
+        if (fin != null) Workflows.TahsilatYenidenHesapla(Db, fin.L("id"));
+        VekaletYukle(d.L("id"));
     }
 
     void SaveNotes()

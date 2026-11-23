@@ -21,8 +21,7 @@ public class DosyaKartiPage : BasePage
     static readonly string[] Gruplar = { "Tümü", "Süre ve duruşma", "Tebligat", "Mali", "Evrak", "Notlar" };
     static readonly (string Anahtar, string Ad)[] HmkAlan =
     {
-        ("dava_dilekcesi_tarih", "Dava dilekçesi"), ("cevap_dilekcesi_tarih", "Cevap dilekçesi"),
-        ("cevaba_cevap_tarih", "Cevaba cevap"), ("ikinci_cevap_tarih", "İkinci cevap"), ("durusma_tarihi", "Duruşma"),
+        ("durusma_tarihi", "Duruşma"),
     };
 
     readonly ComboBox _combo = new() { MinWidth = 380, Margin = new Thickness(0, 0, 8, 0) };
@@ -78,14 +77,13 @@ public class DosyaKartiPage : BasePage
         }
 
         // ---- araç şeridi
-        var araclar = Ui.WRow(Ui.Btn("💰 Ücret Anlaşması", "", UcretAnlasmasi), Ui.Btn("＋ Tahsilat", "", TahsilatGir), Ui.Btn("⚖ İstinaf Bilgisi", "", IstinafBilgi),
+        var araclar = Ui.WRow(Ui.Btn("⚖ İstinaf Bilgisi", "", IstinafBilgi),
                               Ui.Btn("📎 Evrak Ekle…", "", EvrakSec), Ui.Btn("🔒 Dosyayı Kapat / Aç", "", KapatAc), Ui.Btn("Seçili Kaydı Sil", "Danger", KayitSil));
         araclar.Margin = new Thickness(0, 0, 0, 6);
 
         // ---- özet kartları
-        var kpi = new UniformGrid { Columns = 7, Margin = new Thickness(0, 0, -10, 10) };
+        var kpi = new UniformGrid { Columns = 4, Margin = new Thickness(0, 0, -10, 10) };
         kpi.Children.Add(Mini("Açık süre", _kSure)); kpi.Children.Add(Mini("Sonraki duruşma", _kDur)); kpi.Children.Add(Mini("Tebligat", _kTeb));
-        kpi.Children.Add(Mini("Anlaşılan ücret", _kUcret)); kpi.Children.Add(Mini("Ödenen", _kOde)); kpi.Children.Add(Mini("Kalan bakiye", _kCari));
         kpi.Children.Add(Mini("Masraf • emanet", _kMas));
 
         // ---- zaman çizelgesi süzgeçleri
