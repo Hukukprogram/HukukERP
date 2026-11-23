@@ -41,11 +41,7 @@ public class IcraPage : BasePage
     readonly TextBlock _bTop = KV(22), _bDer = KV(22), _bKalan = KV(18);
     readonly DataTable _tF = new(("Borçlu", "borclu", null), ("İcra Dairesi", "icra_dairesi", null), ("Esas No", "esas_no", null), ("Takip", "takip_tarihi", Fmt.Date),
                                  ("Kesinleşme", "kesinlesme_tarihi", Fmt.Date), ("Alacak", "alacak_tutari", Fmt.Money), ("Tahsil", "tahsil_edilen", Fmt.Money),
-<<<<<<< HEAD
                                  ("Kalan", "kalan", Fmt.Money), ("Durum", "durum", null), ("Açık Görev", "gorev_txt", null), ("Haciz", "haciz_txt", null));
-=======
-                                 ("Kalan", "kalan", Fmt.Money), ("Durum", "durum", null), ("Açık Görev", "gorev_txt", null));
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
     readonly CheckBox _kapaliGoster = new() { Content = "Kapananları da göster", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
 
     // alt: seçili dosya
@@ -58,13 +54,9 @@ public class IcraPage : BasePage
     readonly TabControl _tabs = new();
     readonly ContentControl _altIcerik = new();
     UIElement _altBos = null!, _altDetay = null!;
-<<<<<<< HEAD
     readonly DataTable _tH = new(("Tür", "tur", null), ("Açıklama", "aciklama", null), ("Haciz Tarihi", "haciz_tarihi", Fmt.Date), ("Süre", "sure_txt", null),
                                  ("Düşme Tarihi", "dusme_tarihi", Fmt.Date), ("Kalan", "kalan_txt", null), ("Durum", "durum", null));
     TabItem _tabG = null!, _tabH = null!;
-=======
-    TabItem _tabG = null!;
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
 
     /// <summary>Başka sayfalardan (ör. Müvekkil) belirli müvekkili / icra dosyasını açmak için.</summary>
     public static long Hedef, HedefDosya;
@@ -247,7 +239,6 @@ public class IcraPage : BasePage
         _tabG = Ui.Tab("Süreli görevler", gd);
         _tabs.Items.Add(_tabG);
 
-<<<<<<< HEAD
         var hd = new DockPanel();
         var hb = Ui.WRow(Ui.Btn("＋ Taşınmaz Haczi", "Primary", () => HacizEkle("Taşınmaz")), Ui.Btn("＋ Taşınır Haczi", "Primary", () => HacizEkle("Taşınır")),
                          Ui.Btn("Düzenle", "", HacizDuzenle), Ui.Btn("↻ Haczi Yenile", "", HacizYenile), Ui.Btn("Sil", "Danger", HacizSil));
@@ -261,8 +252,6 @@ public class IcraPage : BasePage
         _tabs.Items.Add(_tabH);
         _tH.MouseDoubleClick += (_, _) => HacizDuzenle();
 
-=======
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
         _not.SetResourceReference(Control.ForegroundProperty, "text");
         _not.SetResourceReference(Control.BackgroundProperty, "surface2");
         _not.SetResourceReference(Control.BorderBrushProperty, "border");
@@ -312,10 +301,7 @@ public class IcraPage : BasePage
             "(SELECT COUNT(*) FROM icra_takipleri i WHERE i.muvekkil_id=m.id AND i.durum<>'Kapandı') AS dsay, " +
             "(SELECT COALESCE(SUM(i.alacak_tutari-i.tahsil_edilen),0) FROM icra_takipleri i WHERE i.muvekkil_id=m.id AND i.durum<>'Kapandı') AS kalan, " +
             "(SELECT MIN(s.son_tarih) FROM sureler s JOIN icra_takipleri i ON i.id=s.icra_id WHERE i.muvekkil_id=m.id AND s.durum='Açık' AND i.durum<>'Kapandı') AS gorev_son, " +
-<<<<<<< HEAD
             "(SELECT MIN(h.dusme_tarihi) FROM icra_hacizler h JOIN icra_takipleri i ON i.id=h.icra_id WHERE i.muvekkil_id=m.id AND h.durum='Devam' AND h.dusme_tarihi!='' AND i.durum<>'Kapandı' AND h.dusme_tarihi <= date('now','+' || h.uyari_gun || ' day')) AS haciz_son, " +
-=======
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
             "(SELECT group_concat(COALESCE(i.borclu,'') || ' ' || COALESCE(i.esas_no,'') || ' ' || COALESCE(i.icra_dairesi,'') || ' ' || COALESCE(i.borclu_tc,''), ' ') FROM icra_takipleri i WHERE i.muvekkil_id=m.id) AS aranan " +
             "FROM muvekkiller m");
 
@@ -324,11 +310,7 @@ public class IcraPage : BasePage
                         "COALESCE(SUM(CASE WHEN durum<>'Kapandı' THEN alacak_tutari-tahsil_edilen ELSE 0 END),0) AS k FROM icra_takipleri");
         _bTop.Text = (ic?.L("n") ?? 0).ToString(); _bDer.Text = (ic?.L("d") ?? 0).ToString(); _bKalan.Text = Utils.FmtMoney(ic?.D("k") ?? 0);
 
-<<<<<<< HEAD
         bool Yakin(Row r) { var k = Utils.DaysLeft(r.S("gorev_son")); return (r.S("gorev_son").Length > 0 && k != null && k <= 7) || r.S("haciz_son").Length > 0; }
-=======
-        bool Yakin(Row r) { var k = Utils.DaysLeft(r.S("gorev_son")); return r.S("gorev_son").Length > 0 && k != null && k <= 7; }
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
         _busy = true;
         _chip[Fl.Dosyali].Metin($"İcra dosyası olanlar {tum.Count(r => r.L("isay") > 0)}");
         _chip[Fl.Gorevli].Metin($"Görevi yaklaşan {tum.Count(Yakin)}");
@@ -390,16 +372,11 @@ public class IcraPage : BasePage
 
         var sag = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
         var k = Utils.DaysLeft(m.S("gorev_son"));
-<<<<<<< HEAD
         var kh = Utils.DaysLeft(m.S("haciz_son"));
         Pill pill;
         if (m.S("haciz_son").Length > 0 && kh != null && (m.S("gorev_son").Length == 0 || k == null || kh <= k || k > 7))
             pill = new Pill(kh < 0 ? $"Haciz {-kh} gün önce düştü" : kh == 0 ? "Haciz bugün düşüyor" : $"Haciz {kh} gün", kh <= 7 ? "danger" : "warn");
         else if (m.S("gorev_son").Length > 0 && k != null && k <= 7) pill = new Pill(k < 0 ? $"Görev {-k} gün geçti" : k == 0 ? "Görev bugün" : $"Görev {k} gün", k <= 3 ? "danger" : "warn");
-=======
-        Pill pill;
-        if (m.S("gorev_son").Length > 0 && k != null && k <= 7) pill = new Pill(k < 0 ? $"Görev {-k} gün geçti" : k == 0 ? "Görev bugün" : $"Görev {k} gün", k <= 3 ? "danger" : "warn");
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
         else if (m.D("kalan") > 0) pill = new Pill(Utils.FmtMoney(m.D("kalan")), "warn");
         else if (m.L("isay") > 0) pill = new Pill("Alacak yok", "ok");
         else pill = new Pill("Dosya yok", "muted");
@@ -473,23 +450,16 @@ public class IcraPage : BasePage
         var rows = Db.Query(
             "SELECT i.*, " +
             "(SELECT COUNT(*) FROM sureler s WHERE s.icra_id=i.id AND s.durum='Açık') AS gorev_say, " +
-<<<<<<< HEAD
             "(SELECT MIN(s.son_tarih) FROM sureler s WHERE s.icra_id=i.id AND s.durum='Açık') AS gorev_son, " +
             "(SELECT COUNT(*) FROM icra_hacizler h WHERE h.icra_id=i.id AND h.durum='Devam') AS haciz_say, " +
             "(SELECT MIN(h.dusme_tarihi) FROM icra_hacizler h WHERE h.icra_id=i.id AND h.durum='Devam') AS haciz_son " +
-=======
-            "(SELECT MIN(s.son_tarih) FROM sureler s WHERE s.icra_id=i.id AND s.durum='Açık') AS gorev_son " +
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
             "FROM icra_takipleri i WHERE i.muvekkil_id=? ORDER BY i.durum='Kapandı', i.id DESC", _mid);
         double alacak = 0, tahsil = 0; int derdest = 0; string enYakin = "";
         foreach (var r in rows)
         {
             r["kalan"] = r.D("alacak_tutari") - r.D("tahsil_edilen");
             r["gorev_txt"] = r.L("gorev_say") == 0 ? "" : $"{r.L("gorev_say")} • {Utils.FmtDate(r.S("gorev_son"))}";
-<<<<<<< HEAD
             r["haciz_txt"] = r.L("haciz_say") == 0 ? "" : $"{r.L("haciz_say")} • düşme {Utils.FmtDate(r.S("haciz_son"))}";
-=======
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
             if (r.S("durum") == "Kapandı") continue;
             derdest++; alacak += r.D("alacak_tutari"); tahsil += r.D("tahsil_edilen");
             if (r.S("gorev_son").Length > 0 && (enYakin.Length == 0 || string.CompareOrdinal(r.S("gorev_son"), enYakin) < 0)) enYakin = r.S("gorev_son");
@@ -505,10 +475,7 @@ public class IcraPage : BasePage
             {
                 ["durum"] = r => r.S("durum") == "Kapandı" ? "muted" : "warn",
                 ["kalan"] = r => r.D("kalan") > 0 && r.S("durum") != "Kapandı" ? "danger" : "ok",
-<<<<<<< HEAD
                 ["haciz_txt"] = r => r.L("haciz_say") > 0 && Utils.DaysLeft(r.S("haciz_son")) is int hk && hk <= 30 ? (hk <= 7 ? "danger" : "warn") : "muted",
-=======
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
             });
             if (onceki > 0)
             {
@@ -548,16 +515,12 @@ public class IcraPage : BasePage
             ["durum"] = r => r.S("durum") == "Tamamlandı" ? "ok" : "warn",
         });
         _tabG.Header = $"Süreli görevler ({gs.Count(x => x.S("durum") == "Açık")} açık)";
-<<<<<<< HEAD
         HacizYukle();
-=======
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
         _notYukleniyor = true;
         _not.Text = d.S("notlar"); _notKirli = false; _notDurum.Text = "";
         _notYukleniyor = false;
     }
 
-<<<<<<< HEAD
     void HacizYukle()
     {
         var hs = Db.Query("SELECT * FROM icra_hacizler WHERE icra_id=? ORDER BY durum='Devam' DESC, dusme_tarihi", _fid);
@@ -596,8 +559,6 @@ public class IcraPage : BasePage
         if (Ui.Confirm(this, "Haciz kaydı silinsin mi?")) { Db.Delete("icra_hacizler", id); Refresh(); }
     }
 
-=======
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
     void NotYaz()
     {
         if (!_notKirli || _fid <= 0) return;
@@ -701,10 +662,7 @@ public class IcraPage : BasePage
         if (_fid == 0) return;
         if (!Ui.Confirm(this, "İcra dosyası (ve bağlı süreli görevleri) silinsin mi?")) return;
         Db.Execute("DELETE FROM sureler WHERE icra_id=?", _fid);
-<<<<<<< HEAD
         Db.Execute("DELETE FROM icra_hacizler WHERE icra_id=?", _fid);
-=======
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
         Db.Delete("icra_takipleri", _fid);
         _fid = 0;
         Refresh();

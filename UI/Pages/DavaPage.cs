@@ -46,11 +46,7 @@ public class DavaPage : BasePage
     // detay
     readonly ContentControl _sag = new();
     readonly TextBlock _dTitle = Ui.Text("", 20, true, "text", true), _dSub = Ui.Muted("");
-<<<<<<< HEAD
     readonly UniformGrid _step = new() { Columns = 4, Margin = new Thickness(0, 0, 0, 8), ToolTip = "Dava aşaması — bir aşamaya tıklayarak güncelleyin" };
-=======
-    readonly UniformGrid _step = new() { Columns = 8, Margin = new Thickness(0, 0, 0, 8), ToolTip = "Dava aşaması — bir aşamaya tıklayarak güncelleyin" };
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
     readonly TextBlock _dkDur = Ui.Text("–", 16, true), _dkSure = Ui.Text("–", 16, true), _dkMasraf = Ui.Text("–", 16, true), _dkTur = Ui.Text("–", 16, true);
     readonly DataTable _tTl = new(("Aşama", "asama", null), ("Tarih", "tarih", Fmt.Date), ("Dayanak", "dayanak", null));
     readonly DataTable _tSu = new(("Son Gün", "son_tarih", Fmt.Date), ("Süre / İş", "baslik", null), ("Dayanak", "dayanak", null), ("Durum", "durum", null));
@@ -149,11 +145,7 @@ public class DavaPage : BasePage
 
     static Pill Etiket(string t, string kind) { var p = new Pill(t, kind); p.Margin = new Thickness(0, 0, 6, 4); return p; }
 
-<<<<<<< HEAD
     static int AsamaNo(string a) { if (a == Kapali) return Asamalar.Length; var i = Array.IndexOf(Asamalar, a); return i < 0 ? 0 : i; }
-=======
-    static int AsamaNo(string a) { var i = Array.IndexOf(Asamalar, a); return i < 0 ? 0 : i; }
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
 
     static string GunMetni(int? k) => k == null ? "" : k < 0 ? $"{-k} gün geçti" : k == 0 ? "bugün" : k == 1 ? "yarın" : $"{k} gün sonra";
 
@@ -166,11 +158,7 @@ public class DavaPage : BasePage
 
         // başlık kartı
         var info = new StackPanel(); info.Children.Add(_dTitle); info.Children.Add(_dSub);
-<<<<<<< HEAD
         var eylem = Ui.WRow(Ui.Btn("✏ Düzenle", "", EditD), Ui.Btn("⚖ İstinaf", "", IstinafDuzenle), Ui.Btn("Sil", "Danger", DelD));
-=======
-        var eylem = Ui.WRow(Ui.Btn("✏ Düzenle", "", EditD), Ui.Btn("Sil", "Danger", DelD));
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
         eylem.HorizontalAlignment = HorizontalAlignment.Right; eylem.MaxWidth = 300;
         var hg = new Grid();
         hg.ColumnDefinitions.Add(new ColumnDefinition()); hg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -371,11 +359,7 @@ public class DavaPage : BasePage
         for (int i = 0; i < Asamalar.Length; i++)
         {
             var seg = new Border { CornerRadius = new CornerRadius(2.5), Margin = new Thickness(0, 0, i == Asamalar.Length - 1 ? 0 : 3, 0) };
-<<<<<<< HEAD
             seg.SetResourceReference(Border.BackgroundProperty, i <= no ? (no >= Asamalar.Length ? "ok" : "accent") : "border");
-=======
-            seg.SetResourceReference(Border.BackgroundProperty, i <= no ? (no == Asamalar.Length - 1 ? "ok" : "accent") : "border");
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
             pg.Children.Add(seg);
         }
 
@@ -409,10 +393,7 @@ public class DavaPage : BasePage
         Ekle("Dosya Kartını aç", DosyaKarti);
         Ekle("Düzenle", EditD);
         Ekle("Aşama tarihlerini güncelle", EditStages);
-<<<<<<< HEAD
         Ekle("İstinaf bilgisi", IstinafDuzenle);
-=======
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
         Ekle("Masraf ekle", AddM);
         cm.Items.Add(new Separator());
         Ekle("Sil…", DelD);
@@ -470,11 +451,7 @@ public class DavaPage : BasePage
             _cur = d;
             _sag.Content = _detay;
             _dTitle.Text = $"{d.S("mahkeme_adi")} • {d.S("esas_no")}";
-<<<<<<< HEAD
             _dSub.Text = $"Müvekkil: {d.S("muvekkil")}" + (d.S("karsi_taraf").Length > 0 ? $"   •   Karşı taraf: {d.S("karsi_taraf")}" : "") + (IstinafOzet(d).Length > 0 ? "\n" + IstinafOzet(d) : "");
-=======
-            _dSub.Text = $"Müvekkil: {d.S("muvekkil")}" + (d.S("karsi_taraf").Length > 0 ? $"   •   Karşı taraf: {d.S("karsi_taraf")}" : "");
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
             StepYaz(d);
 
             var dk = Utils.DaysLeft(d.S("durusma_tarihi"));
@@ -505,10 +482,7 @@ public class DavaPage : BasePage
     void StepYaz(Row d)
     {
         _step.Children.Clear();
-<<<<<<< HEAD
         _step.Columns = Asamalar.Length;
-=======
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
         int no = AsamaNo(d.S("asama_durum"));
         for (int i = 0; i < Asamalar.Length; i++)
         {
@@ -529,15 +503,9 @@ public class DavaPage : BasePage
     {
         var d = _cur;
         if (d == null || AsamaNo(d.S("asama_durum")) == i && d.S("asama_durum") == Asamalar[i]) return;
-<<<<<<< HEAD
         Db.Update("davalar", d.L("id"), new Dictionary<string, object?> { ["asama_durum"] = Asamalar[i] });
         Ctx.Status($"Aşama güncellendi: {Asamalar[i]}");
         if (Asamalar[i] == "İstinaf" && d.S("istinaf_basvuru_tarihi").Length == 0 && d.S("istinaf_mahkemesi").Length == 0) IstinafBilgisi(this, Db, d.L("id"));
-=======
-        if (i == Asamalar.Length - 1 && !Ui.Confirm(this, "Dava “Karara Çıktı” olarak işaretlensin mi? (Derdest listesinden çıkar.)")) return;
-        Db.Update("davalar", d.L("id"), new Dictionary<string, object?> { ["asama_durum"] = Asamalar[i] });
-        Ctx.Status($"Aşama güncellendi: {Asamalar[i]}");
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
         Yukle();
     }
 
@@ -570,7 +538,6 @@ public class DavaPage : BasePage
 
     public void YeniDava() => AddD();
 
-<<<<<<< HEAD
     void IstinafDuzenle()
     {
         if (_cur == null) { Ui.Info(this, "Önce bir dosya seçin."); return; }
@@ -609,8 +576,6 @@ public class DavaPage : BasePage
         return "İstinaf: " + string.Join(" • ", p);
     }
 
-=======
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
     /// <summary>Seçili dosyanın Dosya Kartı sekmesini açar.</summary>
     void DosyaKarti()
     {

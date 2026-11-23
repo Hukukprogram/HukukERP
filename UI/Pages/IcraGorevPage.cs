@@ -24,7 +24,6 @@ public class IcraGorevPage : BasePage
                     Ui.Btn("✔ Tamamlandı", "Ok", () => DurumYap("Tamamlandı")), Ui.Btn("↺ Yeniden Aç", "", () => DurumYap("Açık")), Ui.Btn("Sil", "Danger", Sil),
                     Ui.Muted("Göster:", false), _filtre, Ui.Muted("Ara:", false), _ara));
         _t.MouseDoubleClick += (_, _) => Duzenle();
-<<<<<<< HEAD
         var hBaslik = Ui.H2("🔒 Haciz düşme takibi (uyarı süresine giren hacizler)");
         hBaslik.Margin = new Thickness(0, 10, 0, 4);
         var hAlt = new DockPanel();
@@ -41,13 +40,6 @@ public class IcraGorevPage : BasePage
         var hs = IcraHaciz.Uyarilar(Db);
         foreach (var h in hs) { h["dosya"] = $"{h.S("icra_dairesi")} {h.S("esas_no")}".Trim(); h["kalan_txt"] = IcraHaciz.Kalan(h); }
         _tH.Load(hs, new() { ["kalan_txt"] = IcraHaciz.Renk, ["dusme_tarihi"] = IcraHaciz.Renk });
-=======
-        Fill(_t);
-    }
-
-    public override void Refresh()
-    {
->>>>>>> db0fd0e4b4349c933141e97196b2722c9289e2e0
         _busy = true;
         try
         {
