@@ -31,6 +31,18 @@ CREATE TABLE IF NOT EXISTS genel_tebligatlar (
     ayrisan_json TEXT DEFAULT '',
     olusturma TEXT DEFAULT (datetime('now','localtime'))
 );
+CREATE TABLE IF NOT EXISTS uets_liste (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    anahtar TEXT UNIQUE NOT NULL,
+    hesap_tipi TEXT DEFAULT 'Sahsi',
+    tarih TEXT DEFAULT '',
+    kurum TEXT DEFAULT '',
+    konu TEXT DEFAULT '',
+    esas_no TEXT DEFAULT '',
+    satir TEXT DEFAULT '',
+    durum TEXT DEFAULT 'Yeni',
+    ilk_gorulme TEXT DEFAULT (datetime('now','localtime'))
+);
 CREATE TABLE IF NOT EXISTS davalar (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     mahkeme_adi TEXT DEFAULT '',
@@ -38,7 +50,7 @@ CREATE TABLE IF NOT EXISTS davalar (
     dava_turu TEXT DEFAULT '',
     karsi_taraf TEXT DEFAULT '',
     durusma_tarihi TEXT DEFAULT '',
-    asama_durum TEXT DEFAULT 'Dava Dilekçesi',
+    asama_durum TEXT DEFAULT 'Dilekçeler',
     genel_notlar TEXT DEFAULT '',
     dava_dilekcesi_tarih TEXT DEFAULT '',
     cevap_dilekcesi_tarih TEXT DEFAULT '',
@@ -117,6 +129,10 @@ CREATE TABLE IF NOT EXISTS vekaletnameler (
     dosya_yolu TEXT DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS ix_vekalet_muv ON vekaletnameler(muvekkil_id);
+CREATE INDEX IF NOT EXISTS ix_dava_muv ON davalar(muvekkil_id);
+CREATE INDEX IF NOT EXISTS ix_finans_muv ON finans_tahsilat(muvekkil_id);
+CREATE INDEX IF NOT EXISTS ix_muv_ad ON muvekkiller(ad_soyad);
+CREATE INDEX IF NOT EXISTS ix_muv_tc ON muvekkiller(tc_no);
 CREATE TABLE IF NOT EXISTS sablonlar (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sablon_adi TEXT NOT NULL,
@@ -149,6 +165,39 @@ CREATE TABLE IF NOT EXISTS bildirim_log (
 CREATE INDEX IF NOT EXISTS ix_teb_tip_durum ON genel_tebligatlar(hesap_tipi, durum);
 CREATE INDEX IF NOT EXISTS ix_teb_hash ON genel_tebligatlar(dosya_hash);
 CREATE INDEX IF NOT EXISTS ix_masraf_dava ON dava_masraflari(dava_id);
+CREATE TABLE IF NOT EXISTS icra_takipleri (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    muvekkil_id INTEGER DEFAULT 0,
+    dava_id INTEGER DEFAULT 0,
+    icra_dairesi TEXT DEFAULT '',
+    esas_no TEXT DEFAULT '',
+    takip_turu TEXT DEFAULT 'İlamsız',
+    borclu TEXT DEFAULT '',
+    borclu_tc TEXT DEFAULT '',
+    takip_tarihi TEXT DEFAULT '',
+    alacak_tutari REAL DEFAULT 0,
+    tahsil_edilen REAL DEFAULT 0,
+    durum TEXT DEFAULT 'Derdest',
+    sonraki_islem TEXT DEFAULT '',
+    sonraki_islem_tarihi TEXT DEFAULT '',
+    notlar TEXT DEFAULT '',
+    olusturma TEXT DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS ix_icra_muv ON icra_takipleri(muvekkil_id);
+CREATE TABLE IF NOT EXISTS icra_hacizler (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    icra_id INTEGER NOT NULL DEFAULT 0,
+    tur TEXT DEFAULT 'Taşınmaz',
+    aciklama TEXT DEFAULT '',
+    haciz_tarihi TEXT DEFAULT '',
+    sure_deger INTEGER DEFAULT 1,
+    sure_birim TEXT DEFAULT 'Yıl',
+    dusme_tarihi TEXT DEFAULT '',
+    uyari_gun INTEGER DEFAULT 30,
+    durum TEXT DEFAULT 'Devam',
+    notlar TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ix_haciz_icra ON icra_hacizler(icra_id);
 CREATE TABLE IF NOT EXISTS cop_kutusu (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tablo TEXT NOT NULL,
@@ -407,10 +456,21 @@ public class Db
             Execute("ALTER TABLE genel_tebligatlar ADD COLUMN dava_id INTEGER DEFAULT 0");
         if (!Query("PRAGMA table_info(finans_tahsilat)").Any(r => r.S("name") == "dava_id"))
             Execute("ALTER TABLE finans_tahsilat ADD COLUMN dava_id INTEGER DEFAULT 0");
+        KolonEkle("sureler", "icra_id", "INTEGER DEFAULT 0");
+        foreach (var (k, t) in new[] { ("istinaf_mahkemesi", "TEXT DEFAULT ''"), ("istinaf_esas_no", "TEXT DEFAULT ''"), ("istinaf_basvuru_tarihi", "TEXT DEFAULT ''"),
+                                       ("istinaf_karar_tarihi", "TEXT DEFAULT ''"), ("istinaf_sonuc", "TEXT DEFAULT ''"), ("istinaf_notu", "TEXT DEFAULT ''") })
+            KolonEkle("davalar", k, t);
+        // eski 8 aşama → yeni 4 aşama (Dilekçeler • Tahkikat • Karar • İstinaf); "Karara Çıktı" kapalı dosya işareti olarak kalır
+        Execute("UPDATE davalar SET asama_durum='Dilekçeler' WHERE asama_durum IN ('Dava Dilekçesi','Cevap Dilekçesi','Cevaba Cevap','İkinci Cevap','')");
+        Execute("UPDATE davalar SET asama_durum='Tahkikat' WHERE asama_durum IN ('Tahkikat / Delil','Bilirkişi')");
+        Execute("UPDATE davalar SET asama_durum='Karar' WHERE asama_durum='Karar Aşaması'");
+        KolonEkle("icra_takipleri", "kesinlesme_tarihi", "TEXT DEFAULT ''");
+        Execute("CREATE INDEX IF NOT EXISTS ix_sure_icra ON sureler(icra_id)");
         KolonEkle("davalar", "kapanis_tarihi", "TEXT DEFAULT ''");
         KolonEkle("davalar", "saklama_bitis", "TEXT DEFAULT ''");
         KolonEkle("davalar", "kapanis_notu", "TEXT DEFAULT ''");
         KolonEkle("muvekkiller", "kvkk_tarih", "TEXT DEFAULT ''");
+        KolonEkle("muvekkiller", "notlar", "TEXT DEFAULT ''");
         // Şema sürümü: ileride değişiklik gerekirse buradan geçiş adımları sürüme göre eklenir.
         if (ScalarL("PRAGMA user_version") < SemaSurumu) Execute($"PRAGMA user_version = {SemaSurumu}");
     }
@@ -502,7 +562,7 @@ public class Db
     }
 
     // --- çöp kutusu: silinen kayıt (ve bağlı alt kayıtları) 60 gün saklanır, geri alınabilir
-    static readonly HashSet<string> CopHaric = new() { "audit_log", "bildirim_log", "ayarlar", "cop_kutusu" };
+    static readonly HashSet<string> CopHaric = new() { "audit_log", "bildirim_log", "ayarlar", "cop_kutusu", "uets_liste" };
     static readonly Dictionary<string, (string Tablo, string Fk)[]> AltKayit = new()
     {
         ["muvekkiller"] = new[] { ("vekaletnameler", "muvekkil_id"), ("finans_tahsilat", "muvekkil_id") },

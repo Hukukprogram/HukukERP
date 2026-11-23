@@ -16,6 +16,7 @@ public class DashboardPage : BasePage
     readonly Inner _cAjanda = new("🗓  Bugünün Ajandası");
     readonly Inner _cFinans = new("💰  Finans & Cari (Vekalet Ücreti)");
     readonly Inner _cIs = new("⏱  Süreli İşler (İş Listesi)");
+    readonly Inner _cIcra = new("⚖  İcra Görevleri");
     readonly Inner _cGorev = new("🚨  Kişisel Görevler (Sona Eren)");
     readonly TextBlock _ozet = Ui.Muted("", false);
     readonly TextBlock _kSure = Ui.Text("0", 26, true), _kDurusma = Ui.Text("0", 26, true), _kTeb = Ui.Text("0", 26, true), _kTahsilat = Ui.Text("0", 26, true);
@@ -52,6 +53,7 @@ public class DashboardPage : BasePage
         _bugun = new BugunPage(ctx, true);
         var left = new StackPanel(); var right = new StackPanel();
         left.Children.Add(_cIs);
+        left.Children.Add(Gap(_cIcra));
         left.Children.Add(Gap(_cGorev));
         left.Children.Add(Gap(_cUets));
         right.Children.Add(_cAjanda);
@@ -127,7 +129,8 @@ public class DashboardPage : BasePage
         var bugunIso = Utils.TodayIso();
         long nSure = d.ScalarL("SELECT COUNT(*) FROM sureler WHERE durum='Açık' AND son_tarih!='' AND son_tarih<=?", bugunIso);
         long nDur = d.ScalarL("SELECT COUNT(*) FROM davalar WHERE durusma_tarihi!='' AND durusma_tarihi>=? AND durusma_tarihi<=date('now','+7 day') AND asama_durum!='Karara Çıktı'", bugunIso);
-        long nTeb = d.ScalarL("SELECT COUNT(*) FROM genel_tebligatlar WHERE durum=?", Workflows.QAvukat);
+        long nUetsYeni = UetsEsitleme.YeniSayisi(d);
+        long nTeb = d.ScalarL("SELECT COUNT(*) FROM genel_tebligatlar WHERE durum=?", Workflows.QAvukat) + nUetsYeni;
         double gec = d.ScalarD("SELECT COALESCE(SUM(kalan_bakiye),0) FROM finans_tahsilat WHERE kalan_bakiye>0 AND sonraki_tahsilat_tarihi!='' AND sonraki_tahsilat_tarihi<=?", bugunIso);
         _kSure.Text = nSure.ToString(); Boya(_kSure, nSure > 0 ? "danger" : "text");
         _kDurusma.Text = nDur.ToString(); Boya(_kDurusma, "text");
@@ -135,12 +138,21 @@ public class DashboardPage : BasePage
         _kTahsilat.Text = Utils.FmtMoney(gec); Boya(_kTahsilat, gec > 0 ? "warn" : "text");
         var parcalar = new List<string>();
         if (nSure > 0) parcalar.Add($"{nSure} süre bugün bitiyor ya da gecikti");
-        if (nTeb > 0) parcalar.Add($"{nTeb} bekleyen tebligat");
+        if (nUetsYeni > 0) parcalar.Add($"UETS'te {nUetsYeni} yeni tebligat göründü");
+        if (nTeb - nUetsYeni > 0) parcalar.Add($"{nTeb - nUetsYeni} bekleyen tebligat");
         _ozet.Text = DateTime.Today.ToString("dd MMMM yyyy, dddd", Utils.Tr) + (parcalar.Count > 0 ? "  •  " + string.Join(", ", parcalar) : "  •  acil bir iş görünmüyor");
         // Şirket UETS bildirimleri
         _cUets.Clear();
-        var ts = d.Query("SELECT * FROM genel_tebligatlar WHERE hesap_tipi='Sahsi' ORDER BY id DESC LIMIT 5");
-        if (ts.Count == 0) _cUets.AddEmpty("Henüz tebligat yok");
+        var yeniler = d.Query("SELECT * FROM uets_liste WHERE hesap_tipi='Sahsi' AND durum='Yeni' ORDER BY id DESC LIMIT 5");
+        foreach (var y in yeniler)
+        {
+            var baslik = (y.S("kurum").Length > 0 ? y.S("kurum") : "UETS tebligatı") + (y.S("esas_no").Length > 0 ? " – " + y.S("esas_no") : "");
+            var tarih = y.S("tarih").Length > 0 ? Utils.FmtDate(y.S("tarih")) : "";
+            _cUets.AddRow(Ui.Text($"🆕 {baslik}" + (tarih.Length > 0 ? $"  ({tarih})" : ""), 13, true, "text", true),
+                          Ui.HRow(new Pill("UETS'te Yeni", "warn"), new Pill("Henüz açılmadı", "muted")));
+        }
+        var ts = d.Query("SELECT * FROM genel_tebligatlar WHERE hesap_tipi='Sahsi' ORDER BY id DESC LIMIT ?", Math.Max(0, 5 - yeniler.Count));
+        if (ts.Count == 0 && yeniler.Count == 0) _cUets.AddEmpty("Henüz tebligat yok");
         foreach (var t in ts)
         {
             var kurum = t.S("gonderen_kurum").Length > 0 ? t.S("gonderen_kurum") : "Tebligat";
@@ -193,7 +205,7 @@ public class DashboardPage : BasePage
 
         // Süreli işler
         _cIs.Clear();
-        var isler = d.Query("SELECT * FROM sureler WHERE durum='Açık' ORDER BY son_tarih='', son_tarih LIMIT 10");
+        var isler = d.Query("SELECT * FROM sureler WHERE durum='Açık' AND icra_id=0 ORDER BY son_tarih='', son_tarih LIMIT 10");
         if (isler.Count == 0) _cIs.AddEmpty("Açık süreli iş yok");
         foreach (var sj in isler)
         {
@@ -202,6 +214,30 @@ public class DashboardPage : BasePage
             UIElement? pill = kj == null ? null : kj < 0 ? new Pill($"{-kj} Gün Geçti", "danger")
                 : kj == 0 ? new Pill("Bugün", "danger") : new Pill($"{kj} Gün", kj <= 3 ? "warn" : "muted");
             _cIs.AddRow(Ui.Text(sj.S("baslik"), 13, false, "text", true), pill, rj);
+        }
+
+        // İcra görevleri
+        _cIcra.Clear();
+        var icg = d.Query("SELECT s.*, TRIM(COALESCE(i.icra_dairesi,'') || ' ' || COALESCE(i.esas_no,'')) AS dosya, COALESCE(i.borclu,'') AS borclu, COALESCE(m.ad_soyad,'') AS muvekkil " +
+                          "FROM sureler s JOIN icra_takipleri i ON i.id=s.icra_id LEFT JOIN muvekkiller m ON m.id=i.muvekkil_id " +
+                          "WHERE s.durum='Açık' AND s.icra_id>0 ORDER BY s.son_tarih='', s.son_tarih LIMIT 10");
+        var hz = IcraHaciz.Uyarilar(d);
+        foreach (var h in hz.Take(8))
+        {
+            var kh = Utils.DaysLeft(h.S("dusme_tarihi"));
+            var ph = new Pill(IcraHaciz.Kalan(h), IcraHaciz.Renk(h) == "muted" ? "warn" : IcraHaciz.Renk(h));
+            var alth = string.Join(" • ", new[] { h.S("muvekkil"), h.S("borclu"), $"{h.S("icra_dairesi")} {h.S("esas_no")}".Trim() }.Where(x => x.Trim().Length > 0));
+            _cIcra.AddRow(Ui.Text($"🔒 {h.S("tur")} haczi düşüyor: {h.S("aciklama")}  —  {alth}", 13, false, "text", true), ph, IcraHaciz.Renk(h) == "muted" ? "warn" : IcraHaciz.Renk(h));
+        }
+        if (icg.Count == 0 && hz.Count == 0) _cIcra.AddEmpty("Açık icra görevi / haciz uyarısı yok");
+        foreach (var ij in icg)
+        {
+            var ki = Utils.DaysLeft(ij.S("son_tarih"));
+            var ri = Ui.DeadlineKind(ij.S("son_tarih"));
+            UIElement? pill = ki == null ? null : ki < 0 ? new Pill($"{-ki} Gün Geçti", "danger")
+                : ki == 0 ? new Pill("Bugün", "danger") : new Pill($"{ki} Gün", ki <= 3 ? "warn" : "muted");
+            var alt = string.Join(" • ", new[] { ij.S("muvekkil"), ij.S("borclu"), ij.S("dosya") }.Where(x => x.Trim().Length > 0));
+            _cIcra.AddRow(Ui.Text($"{ij.S("baslik")}" + (alt.Length > 0 ? $"  —  {alt}" : "") , 13, false, "text", true), pill, ri);
         }
 
         // Görevler

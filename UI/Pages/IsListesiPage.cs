@@ -18,14 +18,14 @@ public class IsListesiPage : BasePage
 
     public IsListesiPage(AppCtx ctx) : base(ctx)
     {
-        Top(Ui.PageHeader("İş Listesi", "Son tarihi olan işler • UETS tebligatlarından tek tıkla eklenir • çift tıklayınca düzenlenir"));
+        Top(Ui.PageHeader("İş Listesi", "Yalnızca UETS tebligatlarından gelen süreler • UETS sayfasından \"⏱ İş Listesi\" ile eklenir • çift tıklayınca düzenlenir"));
 
         foreach (var x in new[] { "Açık İşler", "Tamamlananlar", "Tümü" }) _filtre.Items.Add(x);
         _filtre.SelectedIndex = 0;
         _filtre.SelectionChanged += (_, _) => { if (!_busy) Refresh(); };
         _ara.TextChanged += (_, _) => { if (!_busy) Refresh(); };
 
-        Top(Ui.HRow(Ui.Btn("＋ Yeni İş", "Primary", Ekle), Ui.Btn("⚖ Tebligat Süresi Ekle (Katalog)", "Primary", KatalogEkle), Ui.Btn("Düzenle", "", Duzenle), Ui.Btn("🔍 Hesap Dökümü", "", Dokum),
+        Top(Ui.HRow(Ui.Btn("Düzenle", "", Duzenle), Ui.Btn("🔍 Hesap Dökümü", "", Dokum),
                     Ui.Btn("✔ Tamamlandı", "Ok", () => DurumYap("Tamamlandı")), Ui.Btn("↺ Yeniden Aç", "", () => DurumYap("Açık")),
                     Ui.Btn("Sil", "Danger", Sil)));
         Top(Ui.HRow(Ui.Muted("Göster:", false), _filtre, Ui.Muted("Ara:", false), _ara,
@@ -50,7 +50,7 @@ public class IsListesiPage : BasePage
                 "SELECT s.*, TRIM(COALESCE(d.mahkeme_adi,'') || ' ' || COALESCE(d.esas_no,'')) AS dava, " +
                 "CASE WHEN s.tebligat_id>0 THEN TRIM(COALESCE(g.gonderen_kurum,'') || ' ' || COALESCE(g.esas_no,'')) ELSE '' END AS uets " +
                 "FROM sureler s LEFT JOIN davalar d ON d.id=s.dava_id LEFT JOIN genel_tebligatlar g ON g.id=s.tebligat_id " +
-                (f == 0 ? "WHERE s.durum='Açık' " : f == 1 ? "WHERE s.durum='Tamamlandı' " : "") +
+                "WHERE s.tebligat_id>0 " + (f == 0 ? "AND s.durum='Açık' " : f == 1 ? "AND s.durum='Tamamlandı' " : "") +
                 "ORDER BY CASE s.durum WHEN 'Açık' THEN 0 ELSE 1 END, s.son_tarih");
             if (q.Length > 0)
                 rows = rows.Where(r => Utils.TrLower(r.S("baslik") + " " + r.S("dayanak") + " " + r.S("dava") + " " + r.S("uets") + " " + r.S("notlar")).Contains(q)).ToList();
@@ -72,6 +72,10 @@ public class IsListesiPage : BasePage
     /// <summary>Süreli iş formu. values içindeki tebligat_id sonuca aynen taşınır.</summary>
     public static Dictionary<string, object?>? Sor(DependencyObject? owner, Db db, IDictionary<string, object?>? values = null)
     {
+        // UETS tebligatından gelen kayıtlar eski formla; diğer tüm yeni/düzenle işlemleri tek modern ekranla
+        bool tebligatli = values != null && values.TryGetValue("tebligat_id", out var tid) && tid != null && Convert.ToString(tid) is { Length: > 0 } ts && ts != "0";
+        if (!tebligatli && owner != null) return IsDialog.Goster(owner, db, values);
+
         var dv = new List<(object? Value, string Label)> { (0L, "— Bağlı dava yok —") };
         foreach (var d in db.Query("SELECT d.id, d.mahkeme_adi, d.esas_no, m.ad_soyad FROM davalar d LEFT JOIN muvekkiller m ON m.id=d.muvekkil_id ORDER BY d.id DESC"))
             dv.Add((d.L("id"), $"{d.S("mahkeme_adi")} {d.S("esas_no")} — {d.S("ad_soyad")}".Trim(' ', '—', ' ')));
@@ -105,7 +109,7 @@ public class IsListesiPage : BasePage
 
     /// <summary>Katalogdan süre seçtirir, son tarihi hesaplar ve iş formu için hazır değerleri döndürür (iptalde null).
     /// tebligat verilirse başlangıç tarihi, metin eşleşmesi ve bağlantı (tebligat_id) ondan gelir.</summary>
-    public static Dictionary<string, object?>? KatalogHazirla(DependencyObject? owner, Db db, Row? tebligat)
+    public static Dictionary<string, object?>? KatalogHazirla(DependencyObject? owner, Db db, Row? tebligat, bool katalogZorunlu = false)
     {
         var liste = IsSureleri.Liste(Path.GetDirectoryName(db.Path));
         var opts = new List<(object? Value, string Label)> { (-1L, "— Katalogda yok: elle gireceğim —") };
@@ -114,16 +118,18 @@ public class IsListesiPage : BasePage
         long varsayilan = -1;
         if (tebligat != null)
         {
+            // UETS tebligatından gelişte eskisi gibi: tebligata göre önerilen süre seçili gelir
             var eslesme = IsSureleri.EnIyiEslesme($"{tebligat.S("konu")} {tebligat.S("gonderen_kurum")} {tebligat.S("ayrisan_json")}");
             if (eslesme >= 0) varsayilan = eslesme;
         }
         var f = new List<Field>
         {
-            new("sure", "Süre (tebligata göre önerilen seçili gelir)", "combo", opts, def: varsayilan),
+            new("sure", tebligat != null ? "Süre (tebligata göre önerilen seçili gelir)" : "Süre türü (elle girmek için ilk satır)", "combo", opts, def: varsayilan),
             new("baslangic", "UETS'e ulaşma / tebliğ tarihi", "date", def: tebligat?.S("teblig_tarihi") ?? ""),
             new("etebligat", $"UETS e-tebligatı (tebliğ tarihi = ulaşma + {IsSureleri.ETebligatGunu} gün)", "check", def: 1L),
-            new("degisken", "Süre elle (gün) – yalnız ara kararda yazan süreler için", "int", def: 0L),
+            new("degisken", tebligat != null ? "Süre elle (gün) – yalnız ara kararda yazan süreler için" : "Süre (gün) – elle yazın", "int", def: 0L),
         };
+        if (tebligat == null) f.Add(new("birim", "Süre birimi (elle girişte)", "combo", new List<(object? Value, string Label)> { ("gun", "Gün"), ("hafta", "Hafta"), ("ay", "Ay") }, def: "gun"));
         var a = FormDialog.Ask(owner, "Tebligat Süresi", f);
         if (a == null) return null;
 
@@ -139,7 +145,18 @@ public class IsListesiPage : BasePage
         long idx = Convert.ToInt64(a["sure"] ?? -1L);
         if (idx < 0)
         {
-            if (tebligat != null) v["son_tarih"] = tebligat.S("son_cevap_tarihi");
+            if (tebligat != null) { v["son_tarih"] = tebligat.S("son_cevap_tarihi"); return v; }
+            int gun = (int)Convert.ToInt64(a["degisken"] ?? 0L);
+            var b0 = Utils.ParseDate(Convert.ToString(a["baslangic"]));
+            if (gun > 0 && b0 != null)
+            {
+                var tb = Convert.ToInt64(a["etebligat"] ?? 0L) == 1 ? b0.Value.AddDays(IsSureleri.ETebligatGunu) : b0.Value;
+                var birim = Convert.ToString(a["birim"]) ?? "gun";
+                var ham = birim == "hafta" ? tb.AddDays(7 * gun) : birim == "ay" ? tb.AddMonths(gun) : tb.AddDays(gun);
+                v["baslangic"] = Utils.Iso(tb);
+                v["son_tarih"] = Utils.Iso(IsSureleri.IsGunuyaKaydir(ham));
+                v["notlar"] = $"Tebliğ: {tb:dd.MM.yyyy} • Süre elle girildi: {gun} {(birim == "hafta" ? "hafta" : birim == "ay" ? "ay" : "gün")}. Adli tatil uzatması uygulanmaz; süreyi kendiniz de kontrol edin.";
+            }
             return v;
         }
         var bas = Utils.ParseDate(Convert.ToString(a["baslangic"]));
@@ -160,15 +177,7 @@ public class IsListesiPage : BasePage
         return v;
     }
 
-    void KatalogEkle()
-    {
-        var h = KatalogHazirla(this, Db, null);
-        if (h == null) return;
-        var v = Sor(this, Db, h);
-        if (v == null) return;
-        Db.Insert("sureler", v);
-        Refresh();
-    }
+    void KatalogEkle() => Ekle();
 
     void Duzenle()
     {

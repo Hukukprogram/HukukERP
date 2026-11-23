@@ -6,7 +6,10 @@ AppId={{7C1D6B3E-4F7A-4B52-9A0E-3D5F8A1B2C40}
 AppName=HukukERP
 AppVersion={#Surum}
 AppPublisher=HukukERP
-CreateAppDir=no
+CreateAppDir=yes
+DefaultDirName={localappdata}\HukukERP
+DisableDirPage=no
+DirExistsWarning=no
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 WizardStyle=modern
@@ -21,7 +24,7 @@ Uninstallable=no
 SetupAppTitle=Kurulum
 SetupWindowTitle=HukukERP Kurulumu
 WelcomeLabel1=HukukERP kurulum sihirbazına hoş geldiniz
-WelcomeLabel2=Bu sihirbaz HukukERP'yi bilgisayarınıza kuracak. Masaüstü ve Başlat menüsüne kısayol eklenir; yeni sürümler açılışta bildirilir. Verileriniz güncellemelerde korunur.%n%nDevam etmek için İleri'ye tıklayın.
+WelcomeLabel2=Bu sihirbaz HukukERP'yi bilgisayarınıza kuracak; kurulum klasörünü bir sonraki adımda seçebilirsiniz. Masaüstü ve Başlat menüsüne kısayol eklenir; yeni sürümler açılışta bildirilir. Verileriniz güncellemelerde korunur.%n%nDevam etmek için İleri'ye tıklayın.
 ButtonNext=İleri >
 ButtonInstall=Kur
 ButtonFinish=Bitir
@@ -36,4 +39,4 @@ ExitSetupMessage=Kurulum tamamlanmadı. Çıkmak istiyor musunuz?
 Source: "Releases\HukukERP-win-Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Run]
-Filename: "{tmp}\HukukERP-win-Setup.exe"; Parameters: "--silent"; StatusMsg: "HukukERP kuruluyor..."; Flags: waituntilterminated
+Filename: "{tmp}\HukukERP-win-Setup.exe"; Parameters: "--silent --installto ""{app}""";  StatusMsg: "HukukERP kuruluyor..."; Flags: waituntilterminated

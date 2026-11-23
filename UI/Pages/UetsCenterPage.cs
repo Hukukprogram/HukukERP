@@ -15,7 +15,12 @@ public class UetsCenterPage : BasePage
 {
     readonly string _tip;
     readonly string _kuyrukDurum;
-    readonly DataTable _tQ, _tA;
+    readonly DataTable _tQ;                          // tek tebligat listesi (Bekleyen / Tümü)
+    bool _sadeceBekleyen = true;
+    readonly Dictionary<bool, TbBtn> _chip = new();
+    readonly StackPanel _yeniPanel = new() { Visibility = Visibility.Collapsed };
+    readonly StackPanel _yeniSatirlar = new();
+    readonly TextBlock _yeniBaslik = Ui.Text("", 14, true, "warn");
     readonly TextBlock _log = Ui.Muted("", false);
     readonly PdfPreview _preview = new();
     readonly TabControl _mainTabs = new();
@@ -25,50 +30,69 @@ public class UetsCenterPage : BasePage
     {
         _tip = tip;
         _kuyrukDurum = Workflows.QAvukat;
-        const string baslik = "Bireysel UETS Takibi";
-        const string alt = "Bireysel UETS hesaplarından gelen tebligatlar burada izlenir.";
-        Top(Ui.PageHeader(baslik, alt));
+        Top(Ui.PageHeader("Bireysel UETS Takibi", "Tebligatlarınız tek listede. Yeni gelenler en üstte uyarı olarak görünür."));
 
-        var bar = Ui.Bar(Ui.HRow(Ui.Btn("🌐 UETS'i Aç (Tarayıcı)", "Primary", ShowBrowser),
-                                 Ui.Btn("Dosya İçe Aktar…", "", ImportPdf), Ui.Btn("Klasörden Tara…", "", ImportFolder)), _log);
-        Top(bar);
+        _browser = new UetsBrowser(ctx, tip, Hesaplar, () => { Refresh(); ctx.RefreshChrome?.Invoke(); });
 
-        _tQ = new DataTable(("Tarih", "teblig_tarihi", Fmt.Date), ("Hesap", "uets_hesap_adi", null), ("Kurum", "gonderen_kurum", null),
-                            ("Esas", "esas_no", null), ("Konu", "konu", null), ("Dava", "dava", null), ("İş Listesi", "is_durum", null));
-        _tA = new DataTable(("Tarih", "teblig_tarihi", Fmt.Date), ("Hesap", "uets_hesap_adi", null), ("Kurum", "gonderen_kurum", null),
-                            ("Konu", "konu", null), ("Esas", "esas_no", null), ("Durum", "durum", null), ("Dava", "dava", null), ("İş Listesi", "is_durum", null));
+        // ---- üst araç çubuğu: yalnızca 3 ana eylem
+        var ekle = Ui.Btn("＋ Dosya ekle  ▾", "", null);
+        ekle.ToolTip = "UETS'ten indirdiğiniz tebligatı programa ekleyin";
+        ekle.Click += (_, _) =>
+        {
+            var m = new ContextMenu { PlacementTarget = ekle, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+            m.Items.Add(Mi("Dosya içe aktar…", ImportPdf));
+            m.Items.Add(Mi("Klasörden tara…", ImportFolder));
+            m.IsOpen = true;
+        };
+        var esit = Ui.Btn("🔄 Şimdi eşitle", "", () => _ = EsitleBas());
+        esit.ToolTip = "UETS listesini yalnızca okur; yeni görünenleri kaydeder. Hiçbir tebligata tıklamaz.";
+        var bar = Ui.Bar(Ui.HRow(Ui.Btn("🌐 UETS'i Aç", "Primary", ShowBrowser), esit, ekle), _log);
+        Top(bar, 8);
 
-        // kuyruk sekmesi
+        // ---- yeni tebligat uyarısı (varsa görünür)
+        _yeniPanel.Margin = new Thickness(0, 0, 0, 8);
+        var yeniKart = new Card();
+        var yBas = new DockPanel();
+        var gor = Ui.Btn("✔ Görüldü say", "", () => YeniGordu());
+        DockPanel.SetDock(gor, Dock.Right);
+        yBas.Children.Add(gor); yBas.Children.Add(_yeniBaslik);
+        yeniKart.Top(yBas);
+        yeniKart.Fill(_yeniSatirlar);
+        _yeniPanel.Children.Add(yeniKart);
+        Top(_yeniPanel, 4);
+
+        // ---- filtre: Bekleyen / Tümü
+        var chips = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        foreach (var (bek, ad) in new[] { (true, "İşlem bekleyenler"), (false, "Tümü") })
+        {
+            var c = new TbBtn("", ad, () => { _sadeceBekleyen = bek; Refresh(); });
+            _chip[bek] = c; chips.Children.Add(c);
+        }
+        Top(chips, 0);
+
+        // ---- tek tebligat listesi
+        _tQ = new DataTable(("Tarih", "teblig_tarihi", Fmt.Date), ("Kurum", "gonderen_kurum", null), ("Esas", "esas_no", null),
+                            ("Konu", "konu", null), ("Durum", "durum", null), ("Dava", "dava", null), ("İş Listesi", "is_durum", null));
         Button B(string metin, string ipucu, string stil, Action eylem) { var dugme = Ui.Btn(metin, stil, eylem); dugme.ToolTip = ipucu; return dugme; }
-        var qb = Ui.FRow(B("✔ İşlendi", "İşlendi olarak işaretle", "Ok", Isle), B("→ Dava Aç", "Dava kaydı aç", "", DavaAc),
-                         B("⏱ İş Listesi", "İş listesine süreli iş ekle", "Primary", () => IseEkle(_tQ.Current)), B("✉ Mail", "Mail gönder", "", () => MailGonder(_tQ.Current)),
-                         B("📁 Bağla", "Davaya bağla", "", () => DavayaBagla(_tQ.Current)), B("📂 Dosya", "Dosyayı aç", "", () => OpenPdf(_tQ.Current)),
-                         B("🌐 UETS", "UETS'te göster", "", () => UetsteGoster(_tQ.Current)), B("📅 Tarih", "Tebliğ (teslim) tarihini düzelt", "", () => TarihDuzelt(_tQ.Current)),
-                         B("🗑 Sil", "Tebligatı sil", "Danger", () => SilTebligat(_tQ.Current)));
-        var qDock = new DockPanel { Margin = new Thickness(0, 8, 0, 0) };
+        var diger = Ui.Btn("⋯ Diğer  ▾", "", null);
+        diger.Click += (_, _) => { var m = DigerMenu(); m.PlacementTarget = diger; m.Placement = System.Windows.Controls.Primitives.PlacementMode.Top; m.IsOpen = true; };
+        var qb = Ui.FRow(B("✔ İşlendi", "İşlendi olarak işaretle", "Ok", Isle),
+                         B("⏱ İş Listesi", "İş listesine süreli iş ekle", "Primary", () => IseEkle(_tQ.Current)),
+                         B("📂 Dosyayı Aç", "Dosyayı aç", "", () => OpenPdf(_tQ.Current)), diger);
+        var qDock = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
         DockPanel.SetDock(qb, Dock.Bottom); qb.Margin = new Thickness(0, 8, 0, 0);
         qDock.Children.Add(qb); qDock.Children.Add(_tQ);
-
-        var aDock = new DockPanel { Margin = new Thickness(0, 8, 0, 0) };
-        var ab = Ui.FRow(B("⏱ İş Listesi", "İş listesine süreli iş ekle", "", () => IseEkle(_tA.Current)), B("📂 Dosya", "Dosyayı aç", "", () => OpenPdf(_tA.Current)),
-                         B("🌐 UETS", "UETS'te göster", "", () => UetsteGoster(_tA.Current)), B("✉ Mail", "Mail gönder", "", () => MailGonder(_tA.Current)),
-                         B("📅 Tarih", "Tebliğ (teslim) tarihini düzelt", "", () => TarihDuzelt(_tA.Current)), B("🗑 Sil", "Tebligatı sil", "Danger", () => SilTebligat(_tA.Current)));
-        DockPanel.SetDock(ab, Dock.Bottom); ab.Margin = new Thickness(0, 8, 0, 0);
-        aDock.Children.Add(ab); aDock.Children.Add(_tA);
-
-        var inner = new TabControl();
-        inner.Items.Add(Ui.Tab("Dava Tebligatları Kuyruğu", qDock));
-        inner.Items.Add(Ui.Tab("Tüm Tebligatlar (Arşiv)", aDock));
+        _tQ.ContextMenu = DigerMenu();
+        _tQ.ContextMenuOpening += (_, e) => { if (_tQ.Current == null) e.Handled = true; };
 
         var prev = new Card();
-        prev.Top(Ui.H2("Canlı Önizleme"));
+        prev.Top(Ui.H2("Önizleme"));
         prev.Fill(_preview);
 
-        var split = Ui.HSplit(inner, prev, 7, 5);
-        split.Margin = new Thickness(0, 8, 0, 0);
+        var liste = Ui.HSplit(qDock, prev, 7, 5);
+        liste.Margin = new Thickness(0, 8, 0, 0);
 
-        _browser = new UetsBrowser(ctx, tip, Hesaplar, Refresh);
-        _mainTabs.Items.Add(Ui.Tab("Kuyruk & Arşiv", split));
+        _mainTabs.Items.Add(Ui.Tab("Tebligatlar", liste));
         _mainTabs.Items.Add(Ui.Tab("UETS (Tarayıcı)", _browser));
         _mainTabs.SelectionChanged += (s, e) =>
         {
@@ -78,7 +102,39 @@ public class UetsCenterPage : BasePage
         Fill(_mainTabs);
 
         _tQ.SelectionChanged += (_, _) => _preview.Open(Yol(_tQ.Current));
-        _tA.SelectionChanged += (_, _) => _preview.Open(Yol(_tA.Current));
+    }
+
+    static MenuItem Mi(string metin, Action eylem)
+    {
+        var m = new MenuItem { Header = metin };
+        m.Click += (_, _) => eylem();
+        return m;
+    }
+
+    ContextMenu DigerMenu()
+    {
+        var cm = new ContextMenu();
+        cm.Items.Add(Mi("→ Dava aç", DavaAc));
+        cm.Items.Add(Mi("📁 Davaya bağla", () => DavayaBagla(_tQ.Current)));
+        cm.Items.Add(Mi("✉ Mail gönder", () => MailGonder(_tQ.Current)));
+        cm.Items.Add(Mi("📅 Tebliğ tarihini düzelt", () => TarihDuzelt(_tQ.Current)));
+        cm.Items.Add(Mi("🌐 UETS'te göster", () => UetsteGoster(_tQ.Current)));
+        cm.Items.Add(new Separator());
+        cm.Items.Add(Mi("🗑 Sil", () => SilTebligat(_tQ.Current)));
+        return cm;
+    }
+
+    async Task EsitleBas()
+    {
+        if (!_browser.Hazir)
+        {
+            ShowBrowser();
+            Ui.Info(this, "Önce UETS'e giriş yapın ve 'Tebligatlarım' listesini açın. Sonra bu düğmeye tekrar basın.");
+            return;
+        }
+        _log.Text = "Eşitleniyor…";
+        await _browser.EsitleIste();
+        _log.Text = _browser.SonDurum;
     }
 
     string? Yol(Row? r) => r != null && r.S("pdf_yolu").Length > 0 ? Workflows.DosyaYolu(Cfg, r.S("pdf_yolu")) : null;
@@ -93,10 +149,35 @@ public class UetsCenterPage : BasePage
         const string isDurum = "(SELECT CASE WHEN COUNT(*)=0 THEN '' ELSE '⏱ ' || MIN(son_tarih) END FROM sureler s " +
                                "WHERE s.tebligat_id=g.id AND s.durum='Açık') AS is_durum, " +
                                "(SELECT TRIM(COALESCE(d.mahkeme_adi,'') || ' ' || COALESCE(d.esas_no,'')) FROM davalar d WHERE d.id=g.dava_id) AS dava";
-        _tQ.Load(Db.Query($"SELECT g.*, {isDurum} FROM genel_tebligatlar g WHERE g.hesap_tipi=? AND g.durum=? ORDER BY g.id DESC", _tip, _kuyrukDurum),
-                 null);
-        _tA.Load(Db.Query($"SELECT g.*, {isDurum} FROM genel_tebligatlar g WHERE g.hesap_tipi=? ORDER BY g.id DESC LIMIT 500", _tip),
-                 new() { ["durum"] = r => Ui.StatusKind(r.S("durum")) });
+        foreach (var kv in _chip) kv.Value.Aktif(kv.Key == _sadeceBekleyen);
+        var rows = _sadeceBekleyen
+            ? Db.Query($"SELECT g.*, {isDurum} FROM genel_tebligatlar g WHERE g.hesap_tipi=? AND g.durum=? ORDER BY g.id DESC", _tip, _kuyrukDurum)
+            : Db.Query($"SELECT g.*, {isDurum} FROM genel_tebligatlar g WHERE g.hesap_tipi=? ORDER BY g.id DESC LIMIT 500", _tip);
+        _tQ.Load(rows, new() { ["durum"] = r => Ui.StatusKind(r.S("durum")) });
+
+        // yeni tebligat uyarısı
+        var yeniler = Db.Query("SELECT * FROM uets_liste WHERE hesap_tipi=? AND durum='Yeni' ORDER BY id DESC LIMIT 6", _tip);
+        var yeniSay = UetsEsitleme.YeniSayisi(Db);
+        _yeniPanel.Visibility = yeniSay > 0 ? Visibility.Visible : Visibility.Collapsed;
+        _yeniBaslik.Text = $"🆕 UETS'te {yeniSay} yeni tebligat göründü  (henüz açılmadı/indirilmedi)";
+        _yeniSatirlar.Children.Clear();
+        foreach (var y in yeniler)
+        {
+            var t = y.S("tarih").Length > 0 ? Utils.FmtDate(y.S("tarih")) + "  " : "";
+            _yeniSatirlar.Children.Add(Ui.Text($"• {t}{y.S("kurum")} {y.S("esas_no")}".Trim(), 13, false, "text", true));
+        }
+        if (yeniSay > yeniler.Count)
+            _yeniSatirlar.Children.Add(Ui.Muted($"… ve {yeniSay - yeniler.Count} tane daha. UETS'i açıp listeden bakın.", false));
+        var son = Cfg.GetString("uets_son_esitleme");
+        if (_log.Text.Length == 0 || _log.Text.StartsWith("Son eşitleme") || _log.Text.StartsWith("Henüz"))
+            _log.Text = son.Length > 0 ? $"Son eşitleme: {son}" : "Henüz eşitleme yapılmadı";
+    }
+
+    void YeniGordu()
+    {
+        Db.Execute("UPDATE uets_liste SET durum='Görüldü' WHERE hesap_tipi=? AND durum='Yeni'", _tip);
+        Refresh();
+        Ctx.RefreshChrome?.Invoke();
     }
 
     void OpenPdf(Row? r)
@@ -269,7 +350,7 @@ public class UetsCenterPage : BasePage
             ["genel_notlar"] = $"UETS tebligatından açıldı ({Utils.FmtDate(t.S("teblig_tarihi"))})",
         });
         Db.Update("genel_tebligatlar", t.L("id"), new Dictionary<string, object?> { ["durum"] = "İşlendi" });
-        Ui.Info(this, $"Dava kaydı #{did} açıldı. 'Dava Takibi' sayfasından tamamlayın.");
+        Ui.Info(this, $"Dava kaydı #{did} açıldı. Dosyalar sayfasından tamamlayın.");
         Refresh();
     }
 }
@@ -328,7 +409,7 @@ public class UetsBrowser : Grid
         lbl.VerticalAlignment = VerticalAlignment.Center;
         var bar = new DockPanel { Margin = new Thickness(0, 8, 0, 6) };
         var nav = Ui.HRow(Ui.Btn("◀", "", () => { if (_ready && _view.CanGoBack) _view.GoBack(); }),
-                          Ui.Btn("⟳", "", () => { if (_ready) _view.Reload(); }), Ui.Btn("Tebligatlarım", "", GoList));
+                          Ui.Btn("⟳", "", () => { if (_ready) _view.Reload(); }), Ui.Btn("Tebligatlarım", "", GoList), EsitleBtn());
         DockPanel.SetDock(nav, Dock.Left);
         var sag = Ui.HRow(lbl, _combo, Ui.Btn("Sayfa Yapısını Kaydet (Tanı)", "", DumpStructure));
         DockPanel.SetDock(sag, Dock.Right);
@@ -353,6 +434,17 @@ public class UetsBrowser : Grid
         SetRow(_status, 2); Children.Add(_status);
         SetRow(_view, 3); Children.Add(_view);
     }
+
+    Button EsitleBtn()
+    {
+        var b = Ui.Btn("🔄 Şimdi eşitle", "", () => { _ = Esitle(true); });
+        b.ToolTip = "Listeyi yalnızca okur; yeni görünenleri kaydeder, hiçbir tebligata tıklamaz";
+        return b;
+    }
+
+    public bool Hazir => _ready;
+    public string SonDurum => _status.Text;
+    public async Task EsitleIste() => await Esitle(true);
 
     int Dk => int.TryParse(_spin.Text.Trim(), out var n) ? Math.Clamp(n, 0, 1440) : 0;
 
@@ -423,12 +515,55 @@ public class UetsBrowser : Grid
         }
         // Sayfa SPA: liste çizilene kadar kısa bekle, sonra toplam tebligat adedini oku
         await Task.Delay(5000);
+        if (await Esitle(false)) return;   // liste satırları okunduysa adet karşılaştırmasına gerek yok (çift bildirim olmasın)
         try
         {
             var res = await _view.CoreWebView2.ExecuteScriptAsync(AdetJs);
             Adet(int.TryParse(res, out var n) ? n : -1);
         }
         catch (Exception e) { _status.Text = "Adet okunamadı: " + e.Message; }
+    }
+
+    /// <summary>Açık sayfadaki liste satırlarını OKUR (tıklama yok) ve uets_liste ile eşitler. Satır okunabildiyse true döner.</summary>
+    async Task<bool> Esitle(bool manuel)
+    {
+        if (!_ready) { if (manuel) _status.Text = "Tarayıcı henüz hazır değil."; return false; }
+        try
+        {
+            if ((_view.Source?.ToString() ?? "").ToLowerInvariant().Contains("login"))
+            {
+                if (manuel) _status.Text = "Oturum açık değil: önce UETS'e giriş yapıp 'Tebligatlarım' listesini açın.";
+                return false;
+            }
+            var json = await _view.CoreWebView2.ExecuteScriptAsync(UetsEsitleme.SatirlarJs);
+            var ham = System.Text.Json.JsonSerializer.Deserialize<string>(json) ?? "[]";
+            var satirlar = UetsEsitleme.Ayristir(System.Text.Json.JsonSerializer.Deserialize<List<string>>(ham) ?? new());
+            if (satirlar.Count == 0)
+            {
+                if (manuel) _status.Text = "Bu sayfada tebligat satırı bulunamadı. 'Tebligatlarım' listesini açıp tekrar deneyin (gerekirse 'Sayfa Yapısını Kaydet (Tanı)' ile bana gönderin).";
+                return false;
+            }
+            var (yeni, toplam, ilk, yeniler) = UetsEsitleme.Kaydet(Db, _tip, satirlar);
+            var zaman = DateTime.Now.ToString("dd.MM.yyyy HH:mm");
+            Cfg.Set("uets_son_esitleme", zaman);
+            _status.Text = ilk
+                ? $"{zaman}: ilk eşitleme yapıldı, listedeki {toplam} tebligat başlangıç olarak kaydedildi (bundan sonra gelenler 'yeni' sayılır)."
+                : yeni > 0 ? $"{zaman}: {yeni} yeni tebligat bulundu! (listede {toplam})" : $"{zaman}: eşitlendi, yeni tebligat yok (listede {toplam}).";
+            if (yeni > 0)
+            {
+                var ozet = string.Join("\n", yeniler.Take(5).Select(x => $"• {Utils.FmtDate(x.Tarih)} {x.Kurum} {x.Esas}".Trim()));
+                var msg = $"📬 UETS'te {yeni} yeni tebligat göründü (henüz açılmadı/indirilmedi):\n{ozet}";
+                var st = Db.GetSettings();
+                Ui.RunAsyncVoid(() => Notify.SendPersonal(st, msg), null, m => _status.Text += $" (Telegram gönderilemedi: {m})");
+            }
+            _onImported();
+            return true;
+        }
+        catch (Exception e)
+        {
+            if (manuel) _status.Text = "Eşitleme yapılamadı: " + e.Message;
+            return false;
+        }
     }
 
     void Adet(int toplam)

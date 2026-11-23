@@ -19,6 +19,7 @@ public class AppCtx
     public Config Cfg { get; init; } = null!;
     public Action<string> SetTheme { get; set; } = _ => { };
     public Action<string> Status { get; set; } = _ => { };
+    public Action? RefreshChrome { get; set; }
     public Action<string, string?> Navigate { get; set; } = (_, _) => { };
 }
 
@@ -125,7 +126,7 @@ public static class Ui
         return t;
     }
 
-    public static TextBlock H1(string text) => Text(text, 22, true);
+    public static TextBlock H1(string text) => Text(text, 24, true);
     public static TextBlock H2(string text) => Text(text, 15, true);
     public static TextBlock Muted(string text, bool wrap = true) => Text(text, 13, false, "muted", wrap);
 
@@ -281,8 +282,8 @@ public class Card : Border
         SetResourceReference(BackgroundProperty, "surface");
         SetResourceReference(BorderBrushProperty, "border");
         BorderThickness = new Thickness(1);
-        CornerRadius = new CornerRadius(14);
-        Padding = new Thickness(16, 14, 16, 14);
+        CornerRadius = new CornerRadius(16);
+        Padding = new Thickness(18, 16, 18, 16);
         Child = Lay;
     }
 
@@ -642,6 +643,16 @@ public class FormDialog : Window
                 };
             case "combo":
                 {
+                    if (f.Options.Count > 25)
+                    {
+                        // binlerce kayıt (ör. müvekkil): arama kutulu seçici
+                        var sp = new SearchPick { MinWidth = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
+                        foreach (var (val, lab) in f.Options) sp.Items.Add(new ComboItem { Value = val, Label = lab });
+                        int ix = -1;
+                        for (int i = 0; i < sp.Items.Count; i++) if (K(sp.Items[i].Value) == K(v)) { ix = i; break; }
+                        sp.SelectedIndex = ix >= 0 ? ix : 0;
+                        return sp;
+                    }
                     var cb = new ComboBox { DisplayMemberPath = "Label" };
                     foreach (var (val, lab) in f.Options) cb.Items.Add(new ComboItem { Value = val, Label = lab });
                     int idx = -1;
@@ -688,7 +699,7 @@ public class FormDialog : Window
         return f.Kind switch
         {
             "multiline" => ((TextBox)w).Text.Trim(),
-            "combo" => ((w as ComboBox)?.SelectedItem as ComboItem)?.Value,
+            "combo" => w is SearchPick spk ? spk.SelectedItem?.Value : ((w as ComboBox)?.SelectedItem as ComboItem)?.Value,
             "date" => ((DateBox)w).Iso() ?? "",
             "money" => Math.Round(Utils.ParseMoney(((TextBox)w).Text), 2),
             "int" => int.TryParse(((TextBox)w).Text, out var n) ? n : 0,

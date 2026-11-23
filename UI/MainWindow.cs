@@ -106,6 +106,7 @@ public class MainWindow : Window
             Db = db, Cfg = cfg,
             SetTheme = name => ApplyTheme(name),
             Status = Status,
+            RefreshChrome = () => UpdateChrome(),
             Navigate = Navigate,
         };
         Build(0);
@@ -134,8 +135,8 @@ public class MainWindow : Window
         }
         Ekle("Yeni müvekkil", "muvekkil", "YeniMuvekkil");
         Ekle("Yeni dava", "dava", "YeniDava");
-        Ekle("Yeni süreli iş", "is_listesi", "YeniIs");
-        Ekle("Katalogdan tebligat süresi", "is_listesi", "KatalogtanSure");
+        Ekle("Yeni icra dosyası", "icra", "Yeni");
+        Ekle("Yeni icra görevi (süreli)", "icra_gorev", "Yeni");
         Ekle("Yeni görev", "kanban", "YeniGorev");
         Ekle("Tahsilat girişi", "muvekkil", "TahsilatEkle");
         if (hedef != null) { m.PlacementTarget = hedef; m.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom; }
@@ -179,8 +180,7 @@ public class MainWindow : Window
             k.Add(("Git: " + _nav[_keys[i]].Text.Trim(), () => Goto(ix)));
         }
         void Is(string ad, string sayfa, string eylem) => k.Add((ad, () => Navigate(sayfa, eylem)));
-        Is("Yeni süreli iş", "is_listesi", "YeniIs");
-        Is("Katalogdan tebligat süresi ekle", "is_listesi", "KatalogtanSure");
+        Is("Yeni icra görevi", "icra_gorev", "Yeni");
         Is("Yeni dava", "dava", "YeniDava");
         Is("Yeni müvekkil", "muvekkil", "YeniMuvekkil");
         Is("Yeni görev", "kanban", "YeniGorev");
@@ -333,8 +333,9 @@ public class MainWindow : Window
             {
                 ("ofis_dash", "▦  Ofis Dashboard", new DashboardPage(_ctx, "avukat")),
                 ("muvekkil", "💼  Müvekkil", new MuvekkilFinansPage(_ctx)),
-                ("dava", "📁  Dava Takibi", new DavaPage(_ctx)),
-                ("dosya_karti", "📂  Dosya Kartı", new DosyaKartiPage(_ctx)),
+                ("dava", "📁  Dosyalar", new DavaPage(_ctx)),
+                ("icra", "⚖  İcra Dosyaları", new IcraPage(_ctx)),
+                ("icra_gorev", "⏱  İcra Görevleri", new IcraGorevPage(_ctx)),
                 ("ajanda", "📅  Ajanda", new AjandaPage(_ctx)),
                 ("is_listesi", "⏱  İş Listesi (Süreler)", new IsListesiPage(_ctx)),
                 ("kanban", "✅  Görevler", new KanbanPage(_ctx)),
@@ -438,6 +439,8 @@ public class MainWindow : Window
 
     void Navigate(string key, string? action)
     {
+        // Dosya Kartı artık Dosyalar sayfasının sekmesi: eski bağlantılar oraya yönlenir
+        if (key == "dosya_karti") { key = "dava"; if (string.IsNullOrEmpty(action)) action = "KartSekmesi"; }
         int i = _keys.IndexOf(key);
         if (i < 0) return;
         Goto(i);
@@ -453,9 +456,10 @@ public class MainWindow : Window
         Pill p = tok.Length > 0 && kisisel.Length > 0 ? new Pill("🌐  Telegram Aktif", "ok") : new Pill("Telegram Pasif", "muted");
         _tgHolder.Content = p;
 
-        _nav["avukat_uets"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM genel_tebligatlar WHERE hesap_tipi='Sahsi' AND durum=?", Workflows.QAvukat), "info");
+        _nav["avukat_uets"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM genel_tebligatlar WHERE hesap_tipi='Sahsi' AND durum=?", Workflows.QAvukat) + UetsEsitleme.YeniSayisi(_db), "info");
         _nav["dava"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM davalar WHERE asama_durum!='Karara Çıktı'"), "ok");
-        _nav["is_listesi"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM sureler WHERE durum='Açık' AND son_tarih<=date('now','+7 day')"), "danger");
+        _nav["is_listesi"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM sureler WHERE tebligat_id>0 AND durum='Açık' AND son_tarih<=date('now','+7 day')"), "danger");
+        _nav["icra_gorev"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM sureler WHERE icra_id>0 AND durum='Açık' AND son_tarih<=date('now','+7 day')") + IcraHaciz.UyariSayisi(_db), "danger");
         _nav["kanban"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM gorevler WHERE durum!='Tamamlandı'"), "warn");
     }
 
