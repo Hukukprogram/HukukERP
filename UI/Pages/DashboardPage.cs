@@ -221,7 +221,15 @@ public class DashboardPage : BasePage
         var icg = d.Query("SELECT s.*, TRIM(COALESCE(i.icra_dairesi,'') || ' ' || COALESCE(i.esas_no,'')) AS dosya, COALESCE(i.borclu,'') AS borclu, COALESCE(m.ad_soyad,'') AS muvekkil " +
                           "FROM sureler s JOIN icra_takipleri i ON i.id=s.icra_id LEFT JOIN muvekkiller m ON m.id=i.muvekkil_id " +
                           "WHERE s.durum='Açık' AND s.icra_id>0 ORDER BY s.son_tarih='', s.son_tarih LIMIT 10");
-        if (icg.Count == 0) _cIcra.AddEmpty("Açık icra görevi yok");
+        var hz = IcraHaciz.Uyarilar(d);
+        foreach (var h in hz.Take(8))
+        {
+            var kh = Utils.DaysLeft(h.S("dusme_tarihi"));
+            var ph = new Pill(IcraHaciz.Kalan(h), IcraHaciz.Renk(h) == "muted" ? "warn" : IcraHaciz.Renk(h));
+            var alth = string.Join(" • ", new[] { h.S("muvekkil"), h.S("borclu"), $"{h.S("icra_dairesi")} {h.S("esas_no")}".Trim() }.Where(x => x.Trim().Length > 0));
+            _cIcra.AddRow(Ui.Text($"🔒 {h.S("tur")} haczi düşüyor: {h.S("aciklama")}  —  {alth}", 13, false, "text", true), ph, IcraHaciz.Renk(h) == "muted" ? "warn" : IcraHaciz.Renk(h));
+        }
+        if (icg.Count == 0 && hz.Count == 0) _cIcra.AddEmpty("Açık icra görevi / haciz uyarısı yok");
         foreach (var ij in icg)
         {
             var ki = Utils.DaysLeft(ij.S("son_tarih"));

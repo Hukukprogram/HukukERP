@@ -24,7 +24,7 @@ public class YardimPage : BasePage
          "Bir davanın her şeyi tek ekranda: süreler, tebligatlar, duruşma notları, müvekkil bilgilendirmeleri, zaman, tahsilat, masraf, emanet ve evrak. Evrakı pencereye sürükleyip bırakabilirsiniz. " +
          "'Duruşma Notu' sonraki duruşmayı günceller, kesin süre verildiyse süreli iş açar ve müvekkile gönderebileceğiniz bilgilendirme metnini panoya kopyalar. 'Dosyayı Kapat' kapanış kontrol listesini ve saklama süresini kaydeder."),
         ("Emanet hesabı",
-         "Müvekkilden alınan harç/masraf avansı 'Giriş', yapılan harcama ya da iade 'Çıkış' olarak girilir. Bakiye müvekkile aittir; eksiye düşerse uyarılırsınız."),
+         "Müvekkil sayfasında 'Cari & Emanet' sekmesinin altındadır. Müvekkilden alınan harç/masraf avansı 'Giriş', yapılan harcama ya da iade 'Çıkış' olarak girilir. Bakiye müvekkile aittir; eksiye düşerse uyarılırsınız."),
         ("Yedekleme ve güvenlik",
          "Program günde bir kez ve her kapanışta yedek alır (Yedekler klasörü). Ayarlar'dan ikinci bir konum (harici disk, bulut klasörü) seçin. Program parolası açılışı korur ama veritabanını şifrelemez. " +
          "Hata kayıtları Loglar klasöründedir. Raporlar sayfasındaki 'Değişiklik Günlüğü' kayıtlardaki ekleme/değişiklik/silmeleri gösterir."),

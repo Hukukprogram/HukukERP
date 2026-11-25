@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using HukukErp.Core;
+using HukukErp.UI.Pages;
 
 namespace HukukErp.Services;
 
@@ -216,6 +217,16 @@ public static class Workflows
             var k = (son.Date - DateTime.Today).Days;
             if (k != 1 && k != 0) continue;
             var sonuc = Bildir(db, s, "ototeb", r.L("id"), bugun, $"📬 Tebligat {(k == 0 ? "BUGÜN" : "yarın")} tebliğ edilmiş sayılacak\n{r.S("gonderen_kurum")} {r.S("esas_no")}\n{r.S("konu")}\nOtomatik tebliğ: {son:dd.MM.yyyy}\nSüre bu tarihten işler; henüz süreli iş eklemediyseniz ekleyin.");
+            if (sonuc < 0) return sent;
+            sent += sonuc;
+        }
+        // --- icra hacizlerinin düşme tarihi: uyarı gününden itibaren 14/7/3/1 gün kala, bittiği gün ve sonrası 3 gün
+        foreach (var r in IcraHaciz.Uyarilar(db))
+        {
+            var k = Utils.DaysLeft(r.S("dusme_tarihi"));
+            if (k == null || !(k == r.L("uyari_gun") || k == 14 || k == 7 || k == 3 || k == 1 || k == 0 || (k < 0 && k >= -3))) continue;
+            var durum = k < 0 ? $"{-k} GÜN ÖNCE DÜŞTÜ" : k == 0 ? "BUGÜN DÜŞÜYOR" : $"{k} gün kaldı";
+            var sonuc = Bildir(db, s, "haciz", r.L("id"), bugun, $"🔒 {r.S("tur").ToUpperInvariant()} HACZİ ({durum})\n{r.S("aciklama")}\nİcra: {r.S("icra_dairesi")} {r.S("esas_no")} — {r.S("borclu")}\nMüvekkil: {r.S("muvekkil")}\nDüşme tarihi: {Utils.FmtDate(r.S("dusme_tarihi"))}\nHaczin yenilenmesi / satış talebi için değerlendirin.");
             if (sonuc < 0) return sent;
             sent += sonuc;
         }

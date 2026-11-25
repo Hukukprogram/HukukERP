@@ -340,7 +340,6 @@ public class MainWindow : Window
                 ("is_listesi", "⏱  İş Listesi (Süreler)", new IsListesiPage(_ctx)),
                 ("kanban", "✅  Görevler", new KanbanPage(_ctx)),
                 ("avukat_uets", "📬  Bireysel UETS", new UetsCenterPage(_ctx, "Sahsi")),
-                ("emanet", "🏦  Emanet Hesabı", new EmanetPage(_ctx)),
             }),
             ("ARAMA VE RAPORLAR", false, new (string, string, BasePage)[]
             {
@@ -459,7 +458,7 @@ public class MainWindow : Window
         _nav["avukat_uets"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM genel_tebligatlar WHERE hesap_tipi='Sahsi' AND durum=?", Workflows.QAvukat) + UetsEsitleme.YeniSayisi(_db), "info");
         _nav["dava"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM davalar WHERE asama_durum!='Karara Çıktı'"), "ok");
         _nav["is_listesi"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM sureler WHERE tebligat_id>0 AND durum='Açık' AND son_tarih<=date('now','+7 day')"), "danger");
-        _nav["icra_gorev"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM sureler WHERE icra_id>0 AND durum='Açık' AND son_tarih<=date('now','+7 day')"), "danger");
+        _nav["icra_gorev"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM sureler WHERE icra_id>0 AND durum='Açık' AND son_tarih<=date('now','+7 day')") + IcraHaciz.UyariSayisi(_db), "danger");
         _nav["kanban"].SetBadge(_db.ScalarL("SELECT COUNT(*) FROM gorevler WHERE durum!='Tamamlandı'"), "warn");
     }
 

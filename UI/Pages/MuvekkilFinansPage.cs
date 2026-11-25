@@ -35,6 +35,9 @@ public class MuvekkilFinansPage : BasePage
     readonly TextBlock _fSum = Ui.Muted("");
     readonly TextBlock _hTitle = Ui.H2("Tahsilat hareketleri — cari kaydı seçin");
     readonly TextBlock _hSum = Ui.Muted("");
+    readonly DataTable _tE = new(("Tarih", "tarih", Fmt.Date), ("Tür", "tur", null), ("Tutar", "tutar", Fmt.Money), ("Dava", "dava", null), ("Açıklama", "aciklama", null));
+    readonly TextBlock _eTitle = Ui.H2("🏦 Emanet hesabı (müvekkilin avansı • bakiye müvekkile aittir)");
+    readonly TextBlock _eSum = Ui.Muted("");
 
     // ---- sol liste
     readonly TextBlock _sayi = Ui.Muted("", false);
@@ -527,7 +530,7 @@ public class MuvekkilFinansPage : BasePage
 
         _tabO = Ui.Tab("Özet", BuildOzet());
         _tabD = Ui.Tab("Dosyalar", BuildDavalar());
-        _tabF = Ui.Tab("Cari hesap", BuildFinans());
+        _tabF = Ui.Tab("Cari & Emanet", BuildFinans());
         var sb = new DockPanel(); sb.Children.Add(_tS);
         _tabS = Ui.Tab("Süreler", sb);
         _tabV = Ui.Tab("Evrak", BuildVekalet());
@@ -619,6 +622,7 @@ public class MuvekkilFinansPage : BasePage
         LoadVekalet();
         LoadCari();
         LoadHareket();
+        LoadEmanet();
         LoadDavalar();
         LoadSureler();
         LoadOzet();
@@ -647,7 +651,7 @@ public class MuvekkilFinansPage : BasePage
         var ks = Utils.DaysLeft(sure);
         _dkSure.Text = sure.Length == 0 ? "Yok" : $"{Utils.FmtDate(sure)} ({(ks == 0 ? "bugün" : ks + " gün")})";
         _dkSure.SetResourceReference(TextBlock.ForegroundProperty, sure.Length > 0 && ks != null && ks <= 3 ? "danger" : "text");
-        _tabF.Header = $"Cari hesap ({_tF.Rows.Count})";
+        _tabF.Header = $"Cari & Emanet ({_tF.Rows.Count} cari, {_tE.Rows.Count} emanet)";
         _tabD.Header = $"Dosyalar ({_tDv.Rows.Count} dava, {_tIc.Rows.Count} icra)";
         _tabS.Header = $"Süreler ({_tS.Rows.Count(r => r.S("durum") == "Açık")} açık)";
         _tabV.Header = $"Evrak ({_tV.Rows.Count})";
@@ -883,7 +887,72 @@ public class MuvekkilFinansPage : BasePage
         DockPanel.SetDock(hb, Dock.Bottom);
         DockPanel.SetDock(_hSum, Dock.Bottom); _hSum.Margin = new Thickness(0, 6, 0, 0);
         bot.Children.Add(_hTitle); bot.Children.Add(hb); bot.Children.Add(_hSum); bot.Children.Add(_tH);
-        return Ui.VSplit(top, bot, 3, 2);
+
+        var em = new DockPanel { Margin = new Thickness(0, 8, 0, 0) };
+        DockPanel.SetDock(_eTitle, Dock.Top); _eTitle.Margin = new Thickness(0, 0, 0, 6);
+        var eb = Ui.HRow(Ui.Btn("＋ Giriş (müvekkilden alındı)", "Ok", () => EmanetEkle("Giriş")), Ui.Btn("＋ Çıkış (harcama / iade)", "", () => EmanetEkle("Çıkış")),
+                         Ui.Btn("Düzenle", "", EmanetDuzenle), Ui.Btn("Sil", "Danger", EmanetSil));
+        eb.Margin = new Thickness(0, 6, 0, 0);
+        DockPanel.SetDock(eb, Dock.Bottom);
+        DockPanel.SetDock(_eSum, Dock.Bottom); _eSum.Margin = new Thickness(0, 6, 0, 0);
+        em.Children.Add(_eTitle); em.Children.Add(eb); em.Children.Add(_eSum); em.Children.Add(_tE);
+        _tE.MouseDoubleClick += (_, _) => EmanetDuzenle();
+        return Ui.VSplit(top, Ui.VSplit(bot, em, 1, 1), 1, 2);
+    }
+
+    // ---- emanet (müvekkilin avansı; büronun parasından ayrı izlenir)
+    void LoadEmanet()
+    {
+        if (_sid == 0) { _tE.Load(new()); _eSum.Text = ""; return; }
+        var rows = Db.Query("SELECT e.*, TRIM(COALESCE(d.mahkeme_adi,'') || ' ' || COALESCE(d.esas_no,'')) AS dava FROM emanet_hareketleri e " +
+                            "LEFT JOIN davalar d ON d.id=e.dava_id WHERE e.muvekkil_id=? ORDER BY e.tarih DESC, e.id DESC", _sid);
+        _tE.Load(rows, new() { ["tur"] = r => r.S("tur") == "Giriş" ? "ok" : "warn" });
+        var gir = rows.Where(r => r.S("tur") == "Giriş").Sum(r => r.D("tutar"));
+        var cik = rows.Where(r => r.S("tur") != "Giriş").Sum(r => r.D("tutar"));
+        _eSum.Text = $"Giriş: {Utils.FmtMoney(gir)}  •  Çıkış: {Utils.FmtMoney(cik)}  •  Emanet bakiyesi: {Utils.FmtMoney(gir - cik)}";
+    }
+
+    List<Field> EFields(string tur) => new()
+    {
+        new("dava_id", "Bağlı dava", "combo", Secenek.Davalar(Db), def: 0L),
+        new("tarih", "Tarih", "date", def: Utils.TodayIso()),
+        new("tur", "Tür", "combo", Field.Of("Giriş", "Çıkış"), def: tur),
+        new("tutar", "Tutar", "money", required: true),
+        new("aciklama", "Açıklama (harç, bilirkişi avansı, iade vb.)"),
+    };
+
+    void EmanetUyar()
+    {
+        var b = Db.ScalarD("SELECT COALESCE(SUM(CASE WHEN tur='Giriş' THEN tutar ELSE -tutar END),0) FROM emanet_hareketleri WHERE muvekkil_id=?", _sid);
+        if (b < 0) Ui.Warn(this, $"Dikkat: emanet bakiyesi eksiye düştü ({Utils.FmtMoney(b)}). Müvekkilin parası olmadan harcama yapılmış görünüyor.");
+    }
+
+    void EmanetEkle(string tur)
+    {
+        if (_sid == 0) { Ui.Info(this, "Önce bir müvekkil seçin."); return; }
+        var v = FormDialog.Ask(this, tur == "Giriş" ? "Emanet Girişi" : "Emanet Çıkışı", EFields(tur));
+        if (v == null) return;
+        v["muvekkil_id"] = _sid;
+        Db.Insert("emanet_hareketleri", v);
+        LoadEmanet();
+        EmanetUyar();
+    }
+
+    void EmanetDuzenle()
+    {
+        var c = _tE.Current;
+        if (c == null) { Ui.Info(this, "Önce emanet listesinden bir kayıt seçin."); return; }
+        var v = FormDialog.Ask(this, "Emanet Kaydı", EFields(c.S("tur")), Db.One("SELECT * FROM emanet_hareketleri WHERE id=?", c.L("id")));
+        if (v == null) return;
+        Db.Update("emanet_hareketleri", c.L("id"), v);
+        LoadEmanet();
+        EmanetUyar();
+    }
+
+    void EmanetSil()
+    {
+        var c = _tE.Current;
+        if (c != null && Ui.Confirm(this, "Emanet kaydı silinsin mi?")) { Db.Delete("emanet_hareketleri", c.L("id")); LoadEmanet(); }
     }
 
     List<Field> FFields(bool yeni)

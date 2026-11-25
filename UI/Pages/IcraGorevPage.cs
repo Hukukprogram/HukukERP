@@ -24,11 +24,22 @@ public class IcraGorevPage : BasePage
                     Ui.Btn("✔ Tamamlandı", "Ok", () => DurumYap("Tamamlandı")), Ui.Btn("↺ Yeniden Aç", "", () => DurumYap("Açık")), Ui.Btn("Sil", "Danger", Sil),
                     Ui.Muted("Göster:", false), _filtre, Ui.Muted("Ara:", false), _ara));
         _t.MouseDoubleClick += (_, _) => Duzenle();
-        Fill(_t);
+        var hBaslik = Ui.H2("🔒 Haciz düşme takibi (uyarı süresine giren hacizler)");
+        hBaslik.Margin = new Thickness(0, 10, 0, 4);
+        var hAlt = new DockPanel();
+        DockPanel.SetDock(hBaslik, Dock.Top);
+        hAlt.Children.Add(hBaslik); hAlt.Children.Add(_tH);
+        Fill(Ui.VSplit(_t, hAlt, 2, 1));
     }
+
+    readonly DataTable _tH = new(("Tür", "tur", null), ("Açıklama", "aciklama", null), ("Müvekkil", "muvekkil", null), ("Borçlu", "borclu", null),
+                                 ("İcra Dosyası", "dosya", null), ("Düşme Tarihi", "dusme_tarihi", Fmt.Date), ("Kalan", "kalan_txt", null));
 
     public override void Refresh()
     {
+        var hs = IcraHaciz.Uyarilar(Db);
+        foreach (var h in hs) { h["dosya"] = $"{h.S("icra_dairesi")} {h.S("esas_no")}".Trim(); h["kalan_txt"] = IcraHaciz.Kalan(h); }
+        _tH.Load(hs, new() { ["kalan_txt"] = IcraHaciz.Renk, ["dusme_tarihi"] = IcraHaciz.Renk });
         _busy = true;
         try
         {

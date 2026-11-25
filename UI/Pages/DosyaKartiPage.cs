@@ -16,16 +16,12 @@ public class DosyaKartiPage : BasePage
     /// <summary>Başka sayfalardan "Dosya Kartı" ile gelinirken açılacak dava.</summary>
     public static long Hedef;
 
-    // zaman sayacı: sayfalar arası gezinirken de çalışmaya devam eder (program kapanırsa kaybolur)
-    static long _sayacDava;
-    static DateTime? _sayacBas;
 
     static readonly string[] Kanallar = { "Telefon", "WhatsApp", "SMS", "E-posta", "Yüz yüze", "Diğer" };
     static readonly string[] Gruplar = { "Tümü", "Süre ve duruşma", "Tebligat", "Mali", "Evrak", "Notlar" };
     static readonly (string Anahtar, string Ad)[] HmkAlan =
     {
-        ("dava_dilekcesi_tarih", "Dava dilekçesi"), ("cevap_dilekcesi_tarih", "Cevap dilekçesi"),
-        ("cevaba_cevap_tarih", "Cevaba cevap"), ("ikinci_cevap_tarih", "İkinci cevap"), ("durusma_tarihi", "Duruşma"),
+        ("durusma_tarihi", "Duruşma"),
     };
 
     readonly ComboBox _combo = new() { MinWidth = 380, Margin = new Thickness(0, 0, 8, 0) };
@@ -33,14 +29,12 @@ public class DosyaKartiPage : BasePage
     readonly StackPanel _serit = new() { Orientation = Orientation.Horizontal };
     readonly TextBlock _seritBaslik = Ui.Muted("", false);
     static TextBlock KV() => Ui.Text("—", 18, true);
-    readonly TextBlock _kSure = KV(), _kDur = KV(), _kTeb = KV(), _kCari = KV(), _kMas = KV(), _kZaman = KV();
+    readonly TextBlock _kSure = KV(), _kDur = KV(), _kTeb = KV(), _kCari = KV(), _kMas = KV(), _kUcret = KV(), _kOde = KV();
     readonly TextBlock _dTitle = Ui.Text("", 22, true, "text", true), _dSub = Ui.Muted("");
     readonly WrapPanel _dEtiket = new() { Margin = new Thickness(0, 8, 0, 0) };
     readonly UniformGrid _step = new() { Columns = 8, Margin = new Thickness(0, 0, 0, 12) };
     readonly StackPanel _tl = new();
     readonly Dictionary<string, TbBtn> _chip = new();
-    readonly Button _sayacBtn;
-    readonly DispatcherTimer _sayacTimer = new() { Interval = TimeSpan.FromSeconds(30) };
     string _grup = "Tümü";
     List<Row> _kayitlar = new();
     Row? _sec; Border? _secB;
@@ -83,15 +77,14 @@ public class DosyaKartiPage : BasePage
         }
 
         // ---- araç şeridi
-        _sayacBtn = Ui.Btn("▶ Sayaç Başlat", "", SayacDegistir);
-        var araclar = Ui.WRow(Ui.Btn("📞 Müvekkile Bildirdim", "", Bilgilendirme), _sayacBtn, Ui.Btn("＋ Zaman", "", ZamanEkle),
+        var araclar = Ui.WRow(Ui.Btn("⚖ İstinaf Bilgisi", "", IstinafBilgi),
                               Ui.Btn("📎 Evrak Ekle…", "", EvrakSec), Ui.Btn("🔒 Dosyayı Kapat / Aç", "", KapatAc), Ui.Btn("Seçili Kaydı Sil", "Danger", KayitSil));
         araclar.Margin = new Thickness(0, 0, 0, 6);
 
         // ---- özet kartları
-        var kpi = new UniformGrid { Columns = 6, Margin = new Thickness(0, 0, -10, 10) };
+        var kpi = new UniformGrid { Columns = 4, Margin = new Thickness(0, 0, -10, 10) };
         kpi.Children.Add(Mini("Açık süre", _kSure)); kpi.Children.Add(Mini("Sonraki duruşma", _kDur)); kpi.Children.Add(Mini("Tebligat", _kTeb));
-        kpi.Children.Add(Mini("Cari kalan", _kCari)); kpi.Children.Add(Mini("Masraf • emanet", _kMas)); kpi.Children.Add(Mini("Harcanan zaman", _kZaman));
+        kpi.Children.Add(Mini("Masraf • emanet", _kMas));
 
         // ---- zaman çizelgesi süzgeçleri
         var chips = new WrapPanel { Margin = new Thickness(0, 4, 0, 10) };
@@ -121,8 +114,6 @@ public class DosyaKartiPage : BasePage
             if (e.Data.GetData(DataFormats.FileDrop) is string[] f) EvrakEkle(f);
             e.Handled = true;
         };
-        _sayacTimer.Tick += (_, _) => SayacYaz();
-        _sayacTimer.Start();
     }
 
     static Border Mini(string etiket, TextBlock deger)
@@ -153,7 +144,6 @@ public class DosyaKartiPage : BasePage
         void Ekle(string h, Action a) { var mi = new MenuItem { Header = h }; mi.Click += (_, _) => a(); m.Items.Add(mi); }
         Ekle("İş Listesi", () => Ctx.Navigate("is_listesi", null));
         if (!_gomulu) Ekle("Dava Takibi", () => { DavaPage.Hedef = Secili; Ctx.Navigate("dava", null); });
-        Ekle("Emanet / Masraf", () => Ctx.Navigate("emanet", null));
         Ekle("Müvekkil sayfası", () => Ctx.Navigate("muvekkil", null));
         m.IsOpen = true;
     }
@@ -258,7 +248,7 @@ public class DosyaKartiPage : BasePage
 
     static string Sure(long dk) => dk >= 60 ? $"{dk / 60} sa {dk % 60} dk" : $"{dk} dk";
 
-    static int AsamaNo(string a) { var i = Array.IndexOf(DavaPage.Asamalar, a); return i < 0 ? 0 : i; }
+    static int AsamaNo(string a) { if (a == DavaPage.Kapali) return DavaPage.Asamalar.Length; var i = Array.IndexOf(DavaPage.Asamalar, a); return i < 0 ? 0 : i; }
 
     static string GunMetni(int? k) => k == null ? "" : k < 0 ? $"{-k} gün geçti" : k == 0 ? "bugün" : k == 1 ? "yarın" : $"{k} gün sonra";
 
@@ -288,14 +278,13 @@ public class DosyaKartiPage : BasePage
 
     void Yukle()
     {
-        SayacYaz();
         var id = Secili;
         _sec = null; _secB = null;
         if (id == 0)
         {
             _dTitle.Text = "Dava seçin"; _dSub.Text = "Üstten müvekkil ve dava seçin ya da önce Dosyalar sayfasında dava ekleyin.";
             _dEtiket.Children.Clear(); _step.Children.Clear(); _kayitlar = new();
-            _kSure.Text = _kDur.Text = _kTeb.Text = _kCari.Text = _kMas.Text = _kZaman.Text = "—";
+            _kSure.Text = _kDur.Text = _kTeb.Text = _kCari.Text = _kMas.Text = _kUcret.Text = _kOde.Text = "—";
             Cizelge();
             return;
         }
@@ -306,7 +295,9 @@ public class DosyaKartiPage : BasePage
         _dSub.Text = $"Müvekkil: {d.S("ad_soyad")}" + (d.S("telefon").Length > 0 ? $" • {d.S("telefon")}" : "") +
                      (d.S("karsi_taraf").Length > 0 ? $"   •   Karşı taraf: {d.S("karsi_taraf")}" : "");
         _dEtiket.Children.Clear();
-        _dEtiket.Children.Add(Etiket(d.S("asama_durum"), d.S("asama_durum") == "Karara Çıktı" ? "ok" : "info"));
+        _dEtiket.Children.Add(Etiket(d.S("asama_durum"), d.S("asama_durum") == DavaPage.Kapali ? "ok" : "info"));
+        var ist = DavaPage.IstinafOzet(d);
+        if (ist.Length > 0) _dEtiket.Children.Add(Etiket(ist, "info"));
         if (d.S("dava_turu").Length > 0) _dEtiket.Children.Add(Etiket(d.S("dava_turu"), "muted"));
         if (kapali) _dEtiket.Children.Add(Etiket($"🔒 DOSYA KAPALI {Utils.FmtDate(d.S("kapanis_tarihi"))} • saklama bitişi {Utils.FmtDate(d.S("saklama_bitis"))}", "warn"));
         StepYaz(d);
@@ -314,6 +305,8 @@ public class DosyaKartiPage : BasePage
         var l = new List<Row>();
         foreach (var (k, ad) in HmkAlan)
             if (d.S(k).Length > 0) l.Add(Satir(d.S(k), k == "durusma_tarihi" ? "Duruşma" : "Aşama", ad));
+        if (d.S("istinaf_basvuru_tarihi").Length > 0) l.Add(Satir(d.S("istinaf_basvuru_tarihi"), "Aşama", $"İstinaf başvurusu • {d.S("istinaf_mahkemesi")} {d.S("istinaf_esas_no")}".Trim()));
+        if (d.S("istinaf_karar_tarihi").Length > 0) l.Add(Satir(d.S("istinaf_karar_tarihi"), "Aşama", $"İstinaf kararı • {d.S("istinaf_sonuc")}".Trim(' ', '•')));
         if (kapali) l.Add(Satir(d.S("kapanis_tarihi"), "Kapanış", d.S("kapanis_notu").Length > 0 ? d.S("kapanis_notu") : "Dosya kapatıldı"));
         foreach (var r in Db.Query("SELECT * FROM ajanda WHERE dava_id=?", id))
             l.Add(Satir(r.S("tarih"), r.S("tur").Length > 0 ? r.S("tur") : "Ajanda", $"{r.S("saat")} {r.S("baslik")}".Trim()));
@@ -362,10 +355,11 @@ public class DosyaKartiPage : BasePage
         _kDur.Text = d.S("durusma_tarihi").Length == 0 ? "Yok" : durGun >= 0 ? $"{Utils.FmtDate(d.S("durusma_tarihi"))} ({GunMetni(durGun)})" : $"{Utils.FmtDate(d.S("durusma_tarihi"))} (geçti)";
         Boya(_kDur, durGun != null && durGun >= 0 && durGun <= 7 ? "warn" : "text");
         _kTeb.Text = teb.ToString(); Boya(_kTeb, "text");
-        var kalan = f?.D("k") ?? 0;
+        var kalan = f?.D("k") ?? 0; var ucret = f?.D("t") ?? 0; var odenen = f?.D("a") ?? 0;
+        _kUcret.Text = ucret > 0 ? Utils.FmtMoney(ucret) : "Girilmedi"; Boya(_kUcret, ucret > 0 ? "text" : "muted");
+        _kOde.Text = Utils.FmtMoney(odenen) + (ucret > 0 ? $"  (%{Math.Min(100, Math.Round(100 * odenen / ucret))})" : ""); Boya(_kOde, "ok");
         _kCari.Text = Utils.FmtMoney(kalan); Boya(_kCari, kalan > 0 ? "warn" : "ok");
         _kMas.Text = $"{Utils.FmtMoney(masraf)} • {Utils.FmtMoney(emanet)}"; Boya(_kMas, "text");
-        _kZaman.Text = Sure(dk); Boya(_kZaman, "text");
 
         _kayitlar = l.OrderByDescending(x => x.S("tarih")).ToList();
         Cizelge();
@@ -400,9 +394,13 @@ public class DosyaKartiPage : BasePage
         var A = DavaPage.Asamalar;
         var mevcut = Db.One("SELECT asama_durum FROM davalar WHERE id=?", id)?.S("asama_durum") ?? "";
         if (mevcut == A[i]) return;
-        if (i == A.Length - 1 && !Ui.Confirm(this, "Dava “Karara Çıktı” olarak işaretlensin mi? (Dosyayı kapatmak için ‘Dosyayı Kapat’ kullanın.)")) return;
         Db.Update("davalar", id, new Dictionary<string, object?> { ["asama_durum"] = A[i] });
         Ctx.Status($"Aşama güncellendi: {A[i]}");
+        if (A[i] == "İstinaf")
+        {
+            var dd = Db.One("SELECT * FROM davalar WHERE id=?", id);
+            if (dd != null && dd.S("istinaf_basvuru_tarihi").Length == 0 && dd.S("istinaf_mahkemesi").Length == 0) DavaPage.IstinafBilgisi(this, Db, id);
+        }
         _busy = true; try { DavaDoldur(id); } finally { _busy = false; }
         Yukle();
     }
@@ -611,37 +609,66 @@ public class DosyaKartiPage : BasePage
     }
 
     // ------------------------------------------------------------------ zaman
-    void SayacYaz()
-    {
-        if (_sayacBas == null) { _sayacBtn.Content = "▶ Sayaç Başlat"; return; }
-        var dk = (long)(DateTime.Now - _sayacBas.Value).TotalMinutes;
-        _sayacBtn.Content = _sayacDava == Secili ? $"■ Durdur ({Sure(dk)})" : $"■ Başka dosyada çalışıyor ({Sure(dk)})";
-    }
-
-    void SayacDegistir()
+    // ------------------------------------------------------------------ ücret / tahsilat
+    /// <summary>Bu dosya için anlaşılan vekalet ücretini girer / günceller.</summary>
+    void UcretAnlasmasi()
     {
         var id = Secili;
         if (id == 0) { Ui.Info(this, "Önce bir dava seçin."); return; }
-        if (_sayacBas == null)
+        var d = Db.One("SELECT * FROM davalar WHERE id=?", id);
+        if (d == null) return;
+        if (d.L("muvekkil_id") == 0) { Ui.Info(this, "Bu dosyanın müvekkili seçili değil; önce Dosyalar sayfasında müvekkili seçin."); return; }
+        var fin = Db.One("SELECT * FROM finans_tahsilat WHERE dava_id=? ORDER BY id LIMIT 1", id);
+        var v = FormDialog.Ask(this, "Vekalet Ücreti Anlaşması", new List<Field>
         {
-            _sayacBas = DateTime.Now; _sayacDava = id;
-            SayacYaz();
-            return;
+            new("toplam_ucret", "Anlaşılan toplam ücret", "money", required: true),
+            new("sonraki_tahsilat_tarihi", "Sonraki tahsilat tarihi", "date"),
+            new("notlar", "Not (ödeme planı vb.)", "multiline"),
+        }, fin);
+        if (v == null) return;
+        long fid;
+        if (fin == null)
+        {
+            v["muvekkil_id"] = d.L("muvekkil_id"); v["dava_id"] = id;
+            v["dosya_konusu"] = $"{d.S("mahkeme_adi")} {d.S("esas_no")}".Trim();
+            v["kalan_bakiye"] = v["toplam_ucret"];
+            fid = Db.Insert("finans_tahsilat", v);
         }
-        var dk = Math.Max(1, (long)Math.Round((DateTime.Now - _sayacBas.Value).TotalMinutes));
-        var hedef = _sayacDava;
-        var v = FormDialog.Ask(this, $"Sayaç durdu: {Sure(dk)}", new List<Field>
-        {
-            new("dakika", "Süre (dakika) – gerekirse düzeltin", "int", def: (int)dk),
-            new("aciklama", "Ne yapıldı?"),
-        });
-        if (v == null) return;   // vazgeçilirse sayaç çalışmaya devam eder
-        _sayacBas = null; _sayacDava = 0;
-        Db.Insert("zaman_kayitlari", new Dictionary<string, object?>
-        {
-            ["dava_id"] = hedef, ["tarih"] = Utils.TodayIso(), ["dakika"] = v["dakika"], ["aciklama"] = v["aciklama"],
-        });
+        else { fid = fin.L("id"); Db.Update("finans_tahsilat", fid, v); }
+        Workflows.TahsilatYenidenHesapla(Db, fid);
         Yukle();
+    }
+
+    /// <summary>Bu dosyaya tahsilat (ödeme) işler; ücret anlaşması yoksa önce onu sorar.</summary>
+    void TahsilatGir()
+    {
+        var id = Secili;
+        if (id == 0) { Ui.Info(this, "Önce bir dava seçin."); return; }
+        var fin = Db.One("SELECT * FROM finans_tahsilat WHERE dava_id=? ORDER BY id LIMIT 1", id);
+        if (fin == null)
+        {
+            UcretAnlasmasi();
+            fin = Db.One("SELECT * FROM finans_tahsilat WHERE dava_id=? ORDER BY id LIMIT 1", id);
+            if (fin == null) return;
+        }
+        var v = FormDialog.Ask(this, "Tahsilat Gir", new List<Field>
+        {
+            new("tarih", "Tahsilat Tarihi", "date", def: Utils.TodayIso()),
+            new("tutar", "Tutar", "money", required: true),
+            new("aciklama", "Açıklama (nakit / havale / çek…)"),
+        });
+        if (v == null || Convert.ToDouble(v["tutar"] ?? 0.0) <= 0) return;
+        v["finans_id"] = fin.L("id");
+        Db.Insert("tahsilat_hareketleri", v);
+        Workflows.TahsilatYenidenHesapla(Db, fin.L("id"));
+        Yukle();
+    }
+
+    void IstinafBilgi()
+    {
+        var id = Secili;
+        if (id == 0) { Ui.Info(this, "Önce bir dava seçin."); return; }
+        if (DavaPage.IstinafBilgisi(this, Db, id)) Yukle();
     }
 
     void ZamanEkle()
@@ -698,7 +725,7 @@ public class DosyaKartiPage : BasePage
             if (!Ui.Confirm(this, "Dosya yeniden açılsın mı? Kapanış ve saklama bilgisi silinir.")) return;
             Db.Update("davalar", id, new Dictionary<string, object?>
             {
-                ["kapanis_tarihi"] = "", ["saklama_bitis"] = "", ["kapanis_notu"] = "", ["asama_durum"] = "Karar Aşaması",
+                ["kapanis_tarihi"] = "", ["saklama_bitis"] = "", ["kapanis_notu"] = "", ["asama_durum"] = "Karar",
             });
             Yukle();
             return;
